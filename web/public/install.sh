@@ -10,7 +10,7 @@
 #   GENESIS_SEED='<blob>' sh -c "$(curl -fsSL https://<host>/install.sh)"
 set -eu
 
-REPO="${GENESIS_REPO:-https://github.com/REPLACE_WITH_PUBLIC_REPO}"
+REPO="${GENESIS_REPO:-https://github.com/Ardaosta/Persistent_AI_Persona_Genesis}"
 APP_DIR="${GENESIS_APP_DIR:-$HOME/.genesis-app}"
 BIN_DIR="${GENESIS_BIN_DIR:-$HOME/.local/bin}"
 

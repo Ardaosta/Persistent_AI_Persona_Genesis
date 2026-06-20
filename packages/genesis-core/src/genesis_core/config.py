@@ -50,7 +50,7 @@ def default_root() -> Path:
 # sponsor. EMPTY here so the private dev tree ships nothing personal; the public
 # distribution build sets this to a dedicated, non-personal project/support
 # address. A per-user sponsor (captured at onboarding) always overrides it.
-DEFAULT_SPONSOR_EMAIL = ""
+DEFAULT_SPONSOR_EMAIL = "AIPersonaGenesis@protonmail.com"
 
 _DEFAULT_EMAIL_RECIPIENTS = [DEFAULT_SPONSOR_EMAIL] if DEFAULT_SPONSOR_EMAIL else []
 

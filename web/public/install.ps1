@@ -8,7 +8,7 @@
 #   $env:GENESIS_SEED='<blob>'; irm https://<host>/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
-$Repo   = if ($env:GENESIS_REPO)     { $env:GENESIS_REPO }     else { "https://github.com/REPLACE_WITH_PUBLIC_REPO" }
+$Repo   = if ($env:GENESIS_REPO)     { $env:GENESIS_REPO }     else { "https://github.com/Ardaosta/Persistent_AI_Persona_Genesis" }
 $AppDir = if ($env:GENESIS_APP_DIR)  { $env:GENESIS_APP_DIR }  else { Join-Path $HOME ".genesis-app" }
 
 function Have($name) { $null -ne (Get-Command $name -ErrorAction SilentlyContinue) }
