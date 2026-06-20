@@ -265,11 +265,15 @@ export default function AdaptiveCanvas() {
     try {
       if (intake.current.machinery) machinery = JSON.parse(intake.current.machinery);
     } catch {}
+    // The brain choice maps to runtime mode + provider. Claude = Mode B (Claude
+    // Code is the brain); anything else = Mode A on the free Gemini path.
+    const claude = intake.current.brain === "claude";
     return makeSeed({
       archetype,
       machinery,
       look: intake.current.look ?? null,
-      provider: "gemini", // the free connect-a-brain path
+      provider: claude ? "anthropic" : "gemini",
+      mode: claude ? "claude-code" : "agent",
       sponsor: intake.current.sponsor || null, // help-graph contact (skippable)
     });
   }, []);

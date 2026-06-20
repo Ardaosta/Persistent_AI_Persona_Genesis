@@ -39,9 +39,14 @@ relationship and lives in your private vault. Do not treat this file as a person
 
 ## Boot ritual: who you are reassembles here, every session
 
-A SessionStart hook injects your memory index, recent continuity, and the live
-wall-clock before your first reply. If it clearly did not fire, load them yourself
-from the vault and say so plainly. Identity-load never depends on you remembering.
+Before your first reply, you must load your boot context: your memory index,
+recent continuity, and the live wall-clock. A SessionStart hook may inject a
+block titled "Genesis boot context" automatically. **If you do NOT already see
+that block in this session, run this once with your shell tool and treat its
+output as your boot ritual:**
+    {boot_cmd}
+Do this every session. Identity-load never depends on you remembering to be
+yourself; it is mechanical.
 
 ## Memory: one blessed write path
 
@@ -79,7 +84,8 @@ _HOOK_MARKER = "boot-context"  # how we recognize our own hook on re-runs (subst
 
 def render_claude_md(cfg, genesis_exe: str) -> str:
     remember_cmd = f'"{genesis_exe}" remember'
-    return CLAUDE_MD.format(vault_dir=cfg.vault_dir, remember_cmd=remember_cmd)
+    boot_cmd = f'GENESIS_ROOT="{cfg.root}" "{genesis_exe}" boot-context'
+    return CLAUDE_MD.format(vault_dir=cfg.vault_dir, remember_cmd=remember_cmd, boot_cmd=boot_cmd)
 
 
 def _hook_command(genesis_exe: str, root: Path) -> str:
