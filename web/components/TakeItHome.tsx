@@ -86,7 +86,7 @@ export default function TakeItHome({ seed }: { seed: Seed }) {
       <button className="send download-btn" onClick={download}>
         Download for {tabs.find((t) => t.id === os)?.label}
       </button>
-      <div className="takehome-note">{dblclick}{tail}
+      <div className="takehome-note">{dblclick}{tail}</div>
 
       <button className="linkish" onClick={() => setShowCmd((v) => !v)}>
         {showCmd ? "Hide the terminal command" : "Prefer the terminal? Show the command"}
