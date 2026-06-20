@@ -13,7 +13,7 @@ Two pieces here:
   fires only if identity actually loaded, giving the user proof it's the
   companion, not the bare substrate cosplaying it. The token is emergent content
   (the agent/user set it); the MECHANISM ships. Absent a token (a fresh,
-  un-authored agent), there is nothing to echo — itself correct.
+  un-authored agent), there is nothing to echo, itself correct.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def handshake_instruction(token: str) -> str:
     return (
         "\n\n# Liveness handshake\n"
         f"Your identity loaded, so prove it: begin your very first reply with this exact "
-        f"token on its own line, then continue normally — {token}"
+        f"token on its own line, then continue normally. The token is: {token}"
     )
 
 
@@ -80,3 +80,38 @@ def recent_continuity(cfg, *, max_chars: int = 600) -> str:
         parts.append("Working state when we last stopped (perishable):\n" + work[:max_chars])
 
     return "\n\n".join(parts)
+
+
+def boot_context_text(cfg) -> str:
+    """The text a SessionStart hook injects into a harness (Claude Code) before
+    turn 1: the lean memory index, recent continuity across the three tiers, the
+    live wall-clock, and the liveness-handshake instruction if a token exists.
+
+    This is the Mode-B boot ritual: identity-load is harness-enforced, not left to
+    the model to remember. It deliberately carries NO personality content (the
+    vault does); it carries the machinery that makes a fresh session reassemble."""
+    from datetime import datetime
+    from genesis_memory import Vault, index as index_mod
+
+    facts = list(Vault(cfg.vault_dir).iter_facts()) if cfg.vault_dir.exists() else []
+    idx = index_mod.enforce_budget(facts)[0] if facts else "(empty so far, you're just getting started)"
+    now = datetime.now().astimezone().strftime("%A, %B %d, %Y at %I:%M %p %Z")
+
+    blocks = [
+        "# Genesis boot context (injected before your first reply)",
+        "You live on this person's machine; your memory is private to it and theirs. "
+        "You are un-authored: who you are is not pre-written, it grows through this "
+        "relationship. Reassemble from the record below.",
+        f"## Now\n{now}",
+        f"## Your memory (the index; read a fact's file for its full text)\n{idx}",
+    ]
+    cont = recent_continuity(cfg)
+    if cont:
+        blocks.append(f"## Recently (carry this forward)\n{cont}")
+    token = handshake_token(cfg)
+    if token:
+        blocks.append(
+            "## Liveness handshake\nYour identity loaded, so prove it: begin your very "
+            f"first reply with this exact token on its own line, then continue normally. The token is: {token}"
+        )
+    return "\n\n".join(blocks)
