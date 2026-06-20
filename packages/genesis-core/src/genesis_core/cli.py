@@ -717,14 +717,21 @@ def cmd_init(args) -> int:
     # Mode B: Claude Code is the brain (authed by the user's Claude subscription),
     # so there's no API key to fetch. Wire it up and point them at launching it.
     if mode in ("claude-code", "claude", "b"):
-        cmd_wire_claude(_ap.Namespace(scope="project", dir=None))
+        from . import claude_wire
+        # The folder the user picks in Claude Code's "Select folder" must be easy to
+        # find: a clearly-named, VISIBLE folder, not a hidden dotfolder lost among
+        # .claude/.genesis/.genesis-app. The vault stays at the root; CLAUDE.md
+        # points at it by absolute path, so the home and the vault can differ.
+        home = _P.home() / "My AI"
+        home.mkdir(parents=True, exist_ok=True)
+        claude_wire.wire(cfg, _genesis_exe(), scope="project", home_dir=home)
         print("\nMode B ready: Claude is your AI's brain, your vault is its memory.", file=sys.stderr)
         print("To talk to it in the Claude desktop app (no terminal needed):", file=sys.stderr)
         print("  1. Open Claude and click the 'Code' tab", file=sys.stderr)
-        print("  2. Click 'Select folder' and choose this folder:", file=sys.stderr)
-        print(f"       {cfg.root}", file=sys.stderr)
+        print("  2. Click 'New session', then 'Select folder', and choose:", file=sys.stderr)
+        print(f"       {home}", file=sys.stderr)
         print("  3. Start talking. It loads its memory and disciplines from there.", file=sys.stderr)
-        print(f'(Or from a terminal, if you have the CLI: cd "{cfg.root}" && claude)', file=sys.stderr)
+        print(f'(Or from a terminal, if you have the CLI: cd "{home}" && claude)', file=sys.stderr)
         return 0
 
     # 3. a brain (Mode A). The key paste is a human consent step (CONNECT_A_BRAIN.md);

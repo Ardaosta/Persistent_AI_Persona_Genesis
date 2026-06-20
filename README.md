@@ -108,6 +108,12 @@ hardened: the action tools run behind a deny-list, which is fine for a single
 trusted user on their own machine but wants a real OS sandbox before it is handed
 to strangers. I would rather say that plainly than oversell it.
 
+Known limitation (Mode B): the Claude Code desktop app currently crashes on
+**ARM64 Windows** (e.g. Windows running in a VM on an Apple Silicon Mac) with an
+access violation, independent of Genesis. The Genesis wiring is verified there;
+the app itself is the problem on that platform. Use x64 Windows or macOS for the
+Claude-Code path until that is resolved upstream.
+
 If the idea resonates, or if you find a hole in the reasoning, I want to hear it.
 
 ## License
