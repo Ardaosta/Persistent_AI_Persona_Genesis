@@ -1,0 +1,12 @@
+{
+  "_comment": "Genesis SessionStart hook: harness-enforced boot ritual. The install agent merges this into the user's Claude Code settings.json (vault-local or user scope). genesis-boot-context prints SOUL + lean index + recent continuity + live wall-clock to stdout; Claude Code injects that into context before turn 1, so identity-load never depends on the model remembering to load itself. VERIFY this schema against the installed Claude Code version before writing — hook schemas evolve.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "${GENESIS_ROOT}/bin/genesis-boot-context" }
+        ]
+      }
+    ]
+  }
+}

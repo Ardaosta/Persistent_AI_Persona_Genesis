@@ -1,0 +1,15 @@
+# Python / uv
+__pycache__/
+*.py[cod]
+.venv/
+.uv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# local companion data (never commit a vault)
+.genesis/
+
+# OS
+.DS_Store
