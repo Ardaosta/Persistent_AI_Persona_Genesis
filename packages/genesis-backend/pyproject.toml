@@ -1,0 +1,13 @@
+[project]
+name = "genesis-backend"
+version = "0.0.1"
+description = "Genesis engine seam: one model-agnostic Backend protocol + Claude and GPT adapters. Provider code lives ONLY here."
+requires-python = ">=3.9"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/genesis_backend"]

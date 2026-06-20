@@ -1,0 +1,295 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: #14151a;
+}
+
+/* The canvas owns its own world — every theming value is a CSS variable so the
+   morph is a smooth transition, not a repaint. Neutral defaults before the guide
+   knows anything. */
+.canvas {
+  --cv-bg: #1b1d24;
+  --cv-accent: #8a8f9c;
+  --cv-text: #e8e9ec;
+  --cv-font: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --cv-track: 0;
+  --cv-scale: 1;
+
+  min-height: 100vh;
+  background-color: var(--cv-bg);
+  color: var(--cv-text);
+  font-family: var(--cv-font);
+  letter-spacing: var(--cv-track);
+  transition: background-color 0.8s ease, color 0.8s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.canvas[data-register="editorial"] { --cv-font: Georgia, "Times New Roman", serif; }
+.canvas[data-register="cinematic"] { --cv-font: "Hoefler Text", Georgia, serif; --cv-track: 0.015em; }
+.canvas[data-register="technical"] { --cv-font: ui-monospace, "SF Mono", Menlo, monospace; --cv-track: -0.01em; }
+.canvas[data-register="gentle"]    { --cv-font: Georgia, serif; }
+.canvas[data-register="plain"]     { --cv-font: ui-sans-serif, system-ui, sans-serif; }
+
+.canvas[data-scale="large"] { --cv-scale: 1.15; }
+.canvas[data-scale="xl"]    { --cv-scale: 1.32; }
+
+.shell {
+  width: 100%;
+  max-width: 640px;
+  padding: 8vh 24px 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.status {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.5;
+  margin-bottom: 2rem;
+  transition: color 0.8s ease;
+}
+
+.stream { flex: 1; display: flex; flex-direction: column; gap: 1.1rem; }
+
+.line {
+  font-size: calc(20px * var(--cv-scale));
+  line-height: 1.5;
+  font-weight: 400;
+  transition: font-family 0.8s ease, letter-spacing 0.8s ease;
+  animation: rise 0.7s ease both;
+}
+
+.line.emph {
+  font-size: calc(30px * var(--cv-scale));
+  color: var(--cv-accent);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dock { padding-top: 1.5rem; }
+
+.tray {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  min-height: 0;
+}
+
+.cap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(14px * var(--cv-scale));
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--cv-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--cv-accent) 14%, transparent);
+  color: var(--cv-accent);
+  animation: pop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+.cap svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+@keyframes pop {
+  from { opacity: 0; transform: translateY(12px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 1rem;
+  animation: rise 0.5s ease both;
+}
+
+.ask-prompt {
+  font-size: calc(19px * var(--cv-scale));
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  transition: font-family 0.8s ease;
+}
+
+.choice {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--cv-text) 16%, transparent);
+  background: color-mix(in srgb, var(--cv-text) 5%, transparent);
+  color: var(--cv-text);
+  font-family: var(--cv-font);
+  cursor: pointer;
+  transition: border-color 0.25s ease, background 0.25s ease, transform 0.15s ease;
+  animation: rise 0.6s ease both;
+}
+
+.choice:hover {
+  border-color: var(--cv-accent);
+  background: color-mix(in srgb, var(--cv-accent) 10%, transparent);
+}
+
+.choice:active { transform: scale(0.99); }
+
+.choice-free {
+  border-style: dashed;
+  background: transparent;
+  opacity: 0.85;
+}
+
+.choice-free:hover { opacity: 1; }
+
+.choice-label {
+  font-size: calc(16px * var(--cv-scale));
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.choice-sub {
+  font-size: calc(13.5px * var(--cv-scale));
+  opacity: 0.65;
+  line-height: 1.4;
+}
+
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--cv-text) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cv-text) 16%, transparent);
+  transition: background 0.8s ease, border-color 0.8s ease;
+}
+
+.composer input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--cv-text);
+  font-size: calc(15px * var(--cv-scale));
+  font-family: var(--cv-font);
+}
+
+.composer input::placeholder { color: var(--cv-text); opacity: 0.4; }
+
+.send {
+  background: var(--cv-accent);
+  color: var(--cv-bg);
+  border: none;
+  border-radius: 10px;
+  padding: 7px 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.8s ease;
+}
+
+/* Dev-only persona switcher — verifies the morph without a live model. */
+.devbar {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.devbar button {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cfd2d8;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.devbar button:hover { background: rgba(255, 255, 255, 0.14); }
+
+.devbar .tag { color: #7d818b; }
+
+/* Take it home — the web→local handoff card (end of onboarding) */
+.takehome {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--cv-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--cv-accent) 8%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.takehome-head {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cv-accent);
+  letter-spacing: 0.01em;
+}
+
+.takehome-sub,
+.takehome-note {
+  font-size: 13px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--cv-text) 80%, transparent);
+}
+
+.takehome-note { font-size: 12px; }
+
+.os-tabs { display: flex; gap: 6px; }
+
+.os-tab {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--cv-text);
+  border: 1px solid color-mix(in srgb, var(--cv-text) 16%, transparent);
+  background: color-mix(in srgb, var(--cv-text) 5%, transparent);
+}
+
+.os-tab.active {
+  border-color: var(--cv-accent);
+  background: color-mix(in srgb, var(--cv-accent) 16%, transparent);
+  color: var(--cv-accent);
+}
+
+.cmd {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cv-text) 9%, #000 8%);
+  border: 1px solid color-mix(in srgb, var(--cv-text) 14%, transparent);
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cv-text);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.copy-btn { align-self: flex-start; }
