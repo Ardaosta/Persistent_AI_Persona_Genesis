@@ -293,3 +293,19 @@ body {
 }
 
 .copy-btn { align-self: flex-start; }
+
+/* Take it home — download-first actions */
+.download-btn { align-self: flex-start; font-weight: 600; }
+
+.linkish {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  color: var(--cv-accent);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  opacity: 0.85;
+}
+.linkish:hover { opacity: 1; }

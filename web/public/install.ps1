@@ -76,9 +76,27 @@ Write-Host "Standing up your AI's home (tuned to your setup answers)..."
 & $VPy -m genesis_core.cli init
 
 $Genesis = Join-Path $AppDir ".venv\Scripts\genesis.exe"
+
+# 5. a double-click "Talk to your AI" launcher on the Desktop, so there is never
+# a terminal to open again. A .bat opens its own console and runs the chat.
+try {
+  $desktop = [Environment]::GetFolderPath("Desktop")
+  $launcher = Join-Path $desktop "Talk to your AI.bat"
+  @"
+@echo off
+title Your AI
+"$Genesis" install
+"@ | Set-Content -Path $launcher -Encoding ASCII
+} catch { }
+
+# 6. flow straight into connecting a brain + the first conversation. No second
+# command for the user to find: the moment the agent can talk, it becomes the
+# guide (it walks them through the key in plain language). Skips cleanly if this
+# is a non-interactive run (piped/headless) where there's no one to prompt.
 Write-Host ""
-Write-Host "Installed. The 'genesis' command is at: $Genesis"
+Write-Host "Your AI's home is ready. Let's wake it up..."
 Write-Host ""
-Write-Host "Next - connect a brain:   & '$Genesis' install"
-Write-Host "Then start the loops:     & '$Genesis' schedule install"
-Write-Host "Talk to it any time:      & '$Genesis' chat"
+& $VPy -m genesis_core.cli install
+
+Write-Host ""
+Write-Host "All set. From now on, just double-click 'Talk to your AI' on your Desktop."

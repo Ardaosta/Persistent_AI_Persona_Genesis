@@ -53,13 +53,48 @@ export function detectOS(): OS {
   return "linux";
 }
 
+function baseUrl(host?: string): string {
+  return (host ?? (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/$/, "");
+}
+
 // The exact command the user pastes into their terminal. `host` defaults to the
-// page origin, so install.sh / install.ps1 are served from this same app.
+// page origin, so install.sh / install.ps1 are served from this same app. This is
+// the "advanced / I like the terminal" path; most people use the download below.
 export function installCommand(seed: Seed, os: OS, host?: string): string {
   const blob = encodeSeed(seed);
-  const base = (host ?? (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/$/, "");
+  const base = baseUrl(host);
   if (os === "windows") {
     return `$env:GENESIS_SEED='${blob}'; irm ${base}/install.ps1 | iex`;
   }
   return `GENESIS_SEED='${blob}' sh -c "$(curl -fsSL ${base}/install.sh)"`;
+}
+
+// A double-clickable installer file with the seed baked in, so a non-technical
+// person never opens a terminal: download, double-click, watch. Returns the
+// filename + contents + a mime type for the download blob.
+export function installFile(
+  seed: Seed,
+  os: OS,
+  host?: string,
+): { name: string; content: string; mime: string } {
+  const blob = encodeSeed(seed);
+  const base = baseUrl(host);
+  if (os === "windows") {
+    // A .bat opens its own console window on double-click. CRLF line endings.
+    const content =
+      "@echo off\r\n" +
+      "setlocal\r\n" +
+      `set "GENESIS_SEED=${blob}"\r\n` +
+      `powershell -ExecutionPolicy Bypass -NoProfile -Command "irm ${base}/install.ps1 | iex"\r\n` +
+      "echo.\r\n" +
+      "pause\r\n";
+    return { name: "Genesis-Setup.bat", content, mime: "application/octet-stream" };
+  }
+  // macOS .command double-clicks open in Terminal; Linux gets a plain .sh.
+  const name = os === "mac" ? "Genesis-Setup.command" : "genesis-setup.sh";
+  const content =
+    "#!/bin/bash\n" +
+    `export GENESIS_SEED='${blob}'\n` +
+    `/bin/bash -c "$(curl -fsSL ${base}/install.sh)"\n`;
+  return { name, content, mime: "application/octet-stream" };
 }
