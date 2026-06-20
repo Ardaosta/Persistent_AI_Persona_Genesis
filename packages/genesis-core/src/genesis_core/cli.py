@@ -18,7 +18,7 @@ def cmd_status(args) -> int:
     cfg = cfgmod.load()
     print(f"home: {cfg.root}")
     print(f"engine: {cfg.provider} ({cfg.model or 'default model'})")
-    print(f"  privacy: {'TRAINING tier — memory paused, no deepening' if cfg.engine_trains else 'private'}")
+    print(f"  privacy: {'TRAINING tier, memory paused, no deepening' if cfg.engine_trains else 'private'}")
     rp = RelationalProfile.load(cfg.vault_dir / "relational_profile.json")
     since = f" (since {rp.since})" if rp.since else ""
     print(f"closeness: {rp.tier}{since}  [model cannot change this]")
@@ -26,9 +26,9 @@ def cmd_status(args) -> int:
         a = (cfg.machinery or {})
         print(f"tuned by onboarding: proactivity={a.get('proactivity','?')}, autonomy={a.get('autonomy','?')}, memory={a.get('memory_aggressiveness','?')}, surface={a.get('surface','?')}")
     else:
-        print("tuned by onboarding: not yet — run `genesis onboard`")
+        print("tuned by onboarding: not yet, run `genesis onboard`")
     if not cfg.vault_dir.exists():
-        print("memory: no vault yet — run onboarding to give your AI a home")
+        print("memory: no vault yet, run onboarding to give your AI a home")
     else:
         facts = list(Vault(cfg.vault_dir).iter_facts())
         text, shrunk = index_mod.enforce_budget(facts)
@@ -63,7 +63,7 @@ def cmd_doctor(args) -> int:
         root = _P(args.path).expanduser() if getattr(args, "path", None) else _P.cwd()
         offenders = scan(root)
         if offenders:
-            print(f"emptiness: FAIL — {len(offenders)} soul fact(s) must not ship:", file=sys.stderr)
+            print(f"emptiness: FAIL, {len(offenders)} soul fact(s) must not ship:", file=sys.stderr)
             for o in offenders:
                 print(f"  {o}", file=sys.stderr)
             return 1
@@ -79,7 +79,7 @@ def cmd_doctor(args) -> int:
 
     key = cfg.load_key()
     if not key:
-        print("  key: NOT FOUND — add it to the secrets file or the env var")
+        print("  key: NOT FOUND, add it to the secrets file or the env var")
         healthy = False
     else:
         print(f"  key: present ({len(key)} chars; value never printed)")
@@ -93,7 +93,7 @@ def cmd_doctor(args) -> int:
                 print("  live check: reachable but empty reply")
                 healthy = False
         except BackendError as e:
-            print(f"  live check: FAILED — {e}")
+            print(f"  live check: FAILED, {e}")
             healthy = False
 
     print("doctor:", "healthy" if healthy else "PROBLEMS FOUND")
@@ -200,7 +200,7 @@ def cmd_install(args) -> int:
 
     cfg = cfgmod.load()
 
-    # If no key is present at all, walk the user through getting one — no jargon
+    # If no key is present at all, walk the user through getting one, no jargon
     if not cfg.load_key():
         if not _prompt_for_key(cfg):
             return 1
@@ -221,7 +221,7 @@ def cmd_install(args) -> int:
             msg = str(e)
             if "401" in msg or "authentication" in msg.lower() or "invalid" in msg.lower():
                 print(
-                    "\nThe key was rejected — it may have expired or been entered incorrectly.",
+                    "\nThe key was rejected, it may have expired or been entered incorrectly.",
                     file=sys.stderr,
                 )
                 print("Check your key at https://console.anthropic.com/ and restart.", file=sys.stderr)
@@ -310,12 +310,12 @@ def cmd_dream(args) -> int:
         archive_queue(cfg.root)  # processed; don't re-adjudicate next time
 
     entry = write_journal(cfg.journal_dir, reflection)
-    # The dream is first-person becoming — append it verbatim to the continuity
+    # The dream is first-person becoming, append it verbatim to the continuity
     # thread (append-only, never rewritten). Distinct from the dated journal.
     from genesis_memory import Continuity
     Continuity(cfg.vault_dir).append(reflection)
     ts = mark_dream(cfg.root)
-    print(f"dreamed at {ts[:16]} — journal: {entry}", file=sys.stderr)
+    print(f"dreamed at {ts[:16]}, journal: {entry}", file=sys.stderr)
     print(reflection, flush=True)
     return 0
 
@@ -334,7 +334,7 @@ def cmd_create_launcher(args) -> int:
     genesis_bin = shutil.which("genesis")
     if not genesis_bin:
         print(
-            "error: 'genesis' command not found — run: pip3 install -e packages/genesis-{memory,backend,core}",
+            "error: 'genesis' command not found, run: pip3 install -e packages/genesis-{memory,backend,core}",
             file=sys.stderr,
         )
         return 1
@@ -343,7 +343,7 @@ def cmd_create_launcher(args) -> int:
     launcher = desktop / "Talk to your AI.command"
     launcher.write_text(
         f'#!/bin/bash\n'
-        f'# Genesis AI launcher — double-click to start a conversation\n'
+        f'# Genesis AI launcher, double-click to start a conversation\n'
         f'clear\n'
         f'echo "Starting your AI..."\n'
         f'echo ""\n'
@@ -363,7 +363,7 @@ def cmd_onboard(args) -> int:
 
     cfg = cfgmod.load()
     cfg.vault_dir.mkdir(parents=True, exist_ok=True)
-    print("Let's set up your AI. A few quick questions — type the number of your answer.\n", file=sys.stderr)
+    print("Let's set up your AI. A few quick questions, type the number of your answer.\n", file=sys.stderr)
 
     model = UserModel()
     while not should_stop(model):
@@ -432,6 +432,71 @@ def _ask_sponsor() -> str:
     return ans if ("@" in ans and "." in ans) else ""
 
 
+def cmd_remember(args) -> int:
+    """The blessed write path, as a command: write one durable fact to the vault
+    (keeps the index and the tree consistent). This is what a Mode-B harness
+    (Claude Code) calls to save durable memory."""
+    from genesis_memory import Fact, Vault
+    cfg = cfgmod.load()
+    if cfg.engine_trains:
+        print(
+            "not saved: running on a training-tier engine, so durable memory is paused. "
+            "Connect a private engine to remember.",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        fact = Fact(id=args.id, kind=args.kind, description=args.desc, body=getattr(args, "body", "") or "")
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    path = Vault(cfg.vault_dir).write(fact)
+    print(f"saved {fact.kind}/{fact.id} -> {path}", file=sys.stderr)
+    return 0
+
+
+def cmd_boot_context(args) -> int:
+    """Print the boot ritual (index + recent continuity + wall-clock + handshake)
+    to stdout. A Claude Code SessionStart hook calls this; its stdout is injected
+    into context before turn 1, so identity-load is harness-enforced."""
+    from .boot import boot_context_text
+    cfg = cfgmod.load()
+    print(boot_context_text(cfg))
+    return 0
+
+
+def _genesis_exe() -> str:
+    """Absolute path to the installed `genesis` entrypoint, for baking into config."""
+    import shutil
+    found = shutil.which("genesis")
+    if found:
+        return found
+    # Fall back to a sibling of the running interpreter (venv layout).
+    exe = _P(sys.executable)
+    cand = exe.with_name("genesis.exe") if exe.name.lower().endswith(".exe") else exe.with_name("genesis")
+    return str(cand)
+
+
+def cmd_wire_claude(args) -> int:
+    """Mode B: wire Claude Code to run as a Genesis frontend (CLAUDE.md + a
+    SessionStart boot-ritual hook). Idempotent."""
+    from . import claude_wire
+    cfg = cfgmod.load()
+    cfg.vault_dir.mkdir(parents=True, exist_ok=True)
+    genesis_exe = _genesis_exe()
+    scope = getattr(args, "scope", "project") or "project"
+    home_dir = _P(args.dir).expanduser() if getattr(args, "dir", None) else None
+    out = claude_wire.wire(cfg, genesis_exe, scope=scope, home_dir=home_dir)
+    print(f"wired Claude Code ({out['scope']} scope):", file=sys.stderr)
+    print(f"  CLAUDE.md: {out['claude_md']}", file=sys.stderr)
+    print(f"  settings:  {out['settings']}  (SessionStart boot-ritual hook)", file=sys.stderr)
+    if out["launch_dir"]:
+        print(f"\nTalk to your persistent companion by running Claude Code here:\n  cd \"{out['launch_dir']}\" && claude", file=sys.stderr)
+    else:
+        print("\nThe companion is wired for every Claude Code session (user scope).", file=sys.stderr)
+    return 0
+
+
 def cmd_capture(args) -> int:
     """Queue a soul-capture candidate (the dream adjudicates it later)."""
     from .capture import append_capture
@@ -462,7 +527,7 @@ def cmd_learn(args) -> int:
         return 0
 
     if not cfg.vault_dir.exists():
-        print("no vault yet — nothing to pursue.", file=sys.stderr)
+        print("no vault yet, nothing to pursue.", file=sys.stderr)
         return 0
 
     vault = Vault(cfg.vault_dir)
@@ -527,7 +592,7 @@ def cmd_heartbeat(args) -> int:
 
 def cmd_schedule(args) -> int:
     """Inspect or control the heartbeat schedule: status / pause / resume /
-    install / uninstall — the same verbs on macOS, Windows, and Linux."""
+    install / uninstall, the same verbs on macOS, Windows, and Linux."""
     from .scheduler import get_scheduler
 
     cfg = cfgmod.load()
@@ -562,13 +627,13 @@ def cmd_schedule(args) -> int:
     if st.paused:
         print("  paused; run `genesis resume` to wake it")
     elif not st.registered:
-        print("  not scheduled — run `genesis init` or `genesis schedule install`")
+        print("  not scheduled, run `genesis init` or `genesis schedule install`")
     return 0
 
 
 def _apply_seed(cfg, seed: dict) -> None:
     """Write a web-onboarding seed into config.json (machinery/archetype/look/
-    provider). Conditions only — a seed never authors personality content."""
+    provider). Conditions only, a seed never authors personality content."""
     import json as _json
     data = {}
     if cfg.config_path.exists():
@@ -630,8 +695,17 @@ def cmd_init(args) -> int:
     else:
         print("already tuned; keeping it.", file=sys.stderr)
 
-    # 3. a brain. The key paste is a human consent step (CONNECT_A_BRAIN.md); we
-    # don't block the tuned-home setup on it. If there's no key yet, leave the
+    # Mode B: Claude Code is the brain (authed by the user's Claude subscription),
+    # so there's no API key to fetch. Wire it up and point them at launching it.
+    if getattr(args, "mode", "agent") in ("claude-code", "claude", "b"):
+        out = cmd_wire_claude(_ap.Namespace(scope="project", dir=None))
+        print("\nMode B ready: Claude Code is your AI's brain, your vault is its memory.", file=sys.stderr)
+        print("Make sure Claude Code is installed and signed in, then talk to it:", file=sys.stderr)
+        print(f'  cd "{cfg.root}" && claude', file=sys.stderr)
+        return out
+
+    # 3. a brain (Mode A). The key paste is a human consent step (CONNECT_A_BRAIN.md);
+    # we don't block the tuned-home setup on it. If there's no key yet, leave the
     # home tuned and tell them the one step left.
     if not cfg.load_key():
         print("\nYour AI's home is ready and tuned. One step left: connect a brain.", file=sys.stderr)
@@ -639,7 +713,7 @@ def cmd_init(args) -> int:
         print("  Then: genesis schedule install   (to start the dream + learn loops)", file=sys.stderr)
         return 0
 
-    # 4. schedule the loops (dream + learn) via the heartbeat — cross-platform
+    # 4. schedule the loops (dream + learn) via the heartbeat, cross-platform
     cmd_setup_daemon(_ap.Namespace())
 
     print("\nDone. A private, tuned home on your machine, dreaming and learning on a schedule.", file=sys.stderr)
@@ -698,11 +772,34 @@ def main(argv=None) -> int:
         help="apply a web-onboarding seed: a base64 blob, a file path, or '-' for stdin "
              "(also read from the GENESIS_SEED env var)",
     )
+    init_p.add_argument(
+        "--mode", choices=["agent", "claude-code"], default="agent",
+        help="agent (Mode A: Genesis runs the loop on your engine) or claude-code "
+             "(Mode B: Claude Code is the brain, Genesis the memory)",
+    )
     init_p.set_defaults(func=cmd_init)
     sub.add_parser(
         "heartbeat",
         help="run the due maintenance loops (dream + learn); used by the scheduler",
     ).set_defaults(func=cmd_heartbeat)
+    rem_p = sub.add_parser("remember", help="write one durable fact to the vault (the blessed write path)")
+    rem_p.add_argument("--kind", required=True, choices=["user", "feedback", "project", "reference", "soul"])
+    rem_p.add_argument("--id", required=True, help="a lowercase-hyphen slug, e.g. dog-vin")
+    rem_p.add_argument("--desc", required=True, help="one line; this is what shows in the index")
+    rem_p.add_argument("--body", default="", help="optional longer detail")
+    rem_p.set_defaults(func=cmd_remember)
+    sub.add_parser(
+        "boot-context",
+        help="print the boot ritual (index + continuity + clock) for a SessionStart hook",
+    ).set_defaults(func=cmd_boot_context)
+    wire_p = sub.add_parser(
+        "wire-claude",
+        help="Mode B: wire Claude Code to run as a Genesis frontend (CLAUDE.md + boot hook)",
+    )
+    wire_p.add_argument("--scope", choices=["project", "user"], default="project",
+                        help="project (a companion home dir, non-invasive) or user (everywhere)")
+    wire_p.add_argument("--dir", default=None, help="companion home dir for project scope (default: the Genesis home)")
+    wire_p.set_defaults(func=cmd_wire_claude)
     cap_p = sub.add_parser("capture", help="queue a soul-capture candidate (the dream adjudicates it)")
     cap_p.add_argument("text", help="the thing that struck you, in your own words")
     cap_p.add_argument("--why", default="", help="optional: which part of you it touches")
