@@ -82,17 +82,26 @@ pull detail on demand.
 _HOOK_MARKER = "boot-context"  # how we recognize our own hook on re-runs (substring of the command)
 
 
+def _posix(p) -> str:
+    """Forward-slash a path. Claude Code runs hooks (and the agent's shell tool)
+    through Git Bash on Windows, where backslashes are escape characters and a
+    `C:\\Users\\...` path mangles to a not-found (exit 127). Forward slashes work
+    in Git Bash, in cmd, and when invoking a .exe, so we always emit them."""
+    return str(p).replace("\\", "/")
+
+
 def render_claude_md(cfg, genesis_exe: str) -> str:
-    remember_cmd = f'"{genesis_exe}" remember'
-    boot_cmd = f'GENESIS_ROOT="{cfg.root}" "{genesis_exe}" boot-context'
+    exe = _posix(genesis_exe)
+    remember_cmd = f'"{exe}" remember'
+    boot_cmd = f'GENESIS_ROOT="{_posix(cfg.root)}" "{exe}" boot-context'
     return CLAUDE_MD.format(vault_dir=cfg.vault_dir, remember_cmd=remember_cmd, boot_cmd=boot_cmd)
 
 
 def _hook_command(genesis_exe: str, root: Path) -> str:
     """The SessionStart command. Carries GENESIS_ROOT so the hook is independent of
-    the user's environment at session time. Works under Git Bash (Claude Code's
-    default hook shell on Windows) and POSIX sh alike."""
-    return f'GENESIS_ROOT="{root}" "{genesis_exe}" boot-context'
+    the user's environment at session time. Uses forward-slash paths so it works
+    under Git Bash (Claude Code's default hook shell on Windows) and POSIX sh."""
+    return f'GENESIS_ROOT="{_posix(root)}" "{_posix(genesis_exe)}" boot-context'
 
 
 def build_hook_entry(genesis_exe: str, root: Path) -> dict:
@@ -151,6 +160,9 @@ def wire(cfg, genesis_exe: str, *, scope: str = "project", home_dir: Path | None
 
     settings = _read_json(settings_path)
     settings = merge_session_hook(settings, genesis_exe, cfg.root)
+    # The Genesis vault is the single source of truth; turn off Claude Code's own
+    # auto-memory so two memory systems don't diverge in this companion's home.
+    settings["autoMemoryEnabled"] = False
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
 

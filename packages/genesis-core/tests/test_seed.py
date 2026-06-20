@@ -2,6 +2,7 @@
 
 import argparse
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -129,16 +130,21 @@ class TestSeededInit(unittest.TestCase):
             provider="anthropic", mode="claude-code",
         ))
         real_load = cfgmod.load
+        # Mode B puts the companion home at ~/My AI (a visible folder); patch home
+        # to the temp dir so the test never touches the real filesystem.
         with mock.patch.object(cfgmod, "load", lambda *a, **k: real_load(self.root)), \
+             mock.patch.object(cli._P, "home", return_value=self.root), \
              mock.patch.object(cli, "cmd_setup_daemon") as daemon, \
              mock.patch.object(cli, "_prompt_for_key") as keyprompt:
             rc = cli.cmd_init(argparse.Namespace(seed=blob, mode="agent"))
         self.assertEqual(rc, 0)
-        # Mode B wired: a project settings.json with our SessionStart hook exists
-        settings = self.root / ".claude" / "settings.json"
+        # Mode B wired into the visible home: settings.json with our hook + CLAUDE.md
+        home = self.root / "My AI"
+        settings = home / ".claude" / "settings.json"
         self.assertTrue(settings.is_file())
         self.assertIn("boot-context", settings.read_text())
-        self.assertTrue((self.root / "CLAUDE.md").is_file())
+        self.assertFalse(json.loads(settings.read_text())["autoMemoryEnabled"])
+        self.assertTrue((home / "CLAUDE.md").is_file())
         # Mode B never asks for an API key and never schedules the Mode-A daemon
         keyprompt.assert_not_called()
         daemon.assert_not_called()
