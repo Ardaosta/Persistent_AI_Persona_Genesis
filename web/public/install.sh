@@ -64,16 +64,29 @@ EOF
 chmod +x "$BIN_DIR/genesis"
 
 # 5. stand up the tuned home. The seed (GENESIS_SEED) is read by init itself.
-say "Standing up your AI's home (tuned to your setup answers)…"
+say "Standing up your AI's home (tuned to your setup answers)..."
 "$VPY" -m genesis_core.cli init
 
-say ""
-say "Installed. The 'genesis' command is at $BIN_DIR/genesis"
+# 6. a double-click "Talk to your AI" launcher on the Desktop (macOS: .command),
+# so there's never a terminal to open again.
+if [ -d "$HOME/Desktop" ]; then
+  launcher="$HOME/Desktop/Talk to your AI.command"
+  printf '#!/bin/bash\nexec "%s" install\n' "$BIN_DIR/genesis" > "$launcher"
+  chmod +x "$launcher"
+fi
+
 case ":$PATH:" in
   *":$BIN_DIR:"*) : ;;
-  *) say "Add it to your PATH:  export PATH=\"$BIN_DIR:\$PATH\"  (add to ~/.zshrc or ~/.bashrc)" ;;
+  *) say "(the 'genesis' command lives at $BIN_DIR/genesis; add $BIN_DIR to your PATH to call it by name)" ;;
 esac
+
+# 7. flow straight into connecting a brain + the first conversation. The moment
+# the agent can talk it becomes the guide (it walks them through the key). Skips
+# cleanly on a non-interactive run where there's no one to prompt.
 say ""
-say "Next — connect a brain:   genesis install"
-say "Then start the loops:     genesis schedule install"
-say "Talk to it any time:      genesis chat"
+say "Your AI's home is ready. Let's wake it up..."
+say ""
+"$VPY" -m genesis_core.cli install
+
+say ""
+say "All set. From now on, just double-click 'Talk to your AI' on your Desktop."
