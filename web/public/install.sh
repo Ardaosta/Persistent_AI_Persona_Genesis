@@ -63,30 +63,35 @@ exec "$APP_DIR/.venv/bin/genesis" "\$@"
 EOF
 chmod +x "$BIN_DIR/genesis"
 
-# 5. stand up the tuned home. The seed (GENESIS_SEED) is read by init itself.
+# 5. stand up the tuned home. The seed (GENESIS_SEED) is read by init itself; the
+# Claude-subscription path also wires Claude Code (Mode B) here.
 say "Standing up your AI's home (tuned to your setup answers)..."
 "$VPY" -m genesis_core.cli init
 
-# 6. a double-click "Talk to your AI" launcher on the Desktop (macOS: .command),
-# so there's never a terminal to open again.
-if [ -d "$HOME/Desktop" ]; then
-  launcher="$HOME/Desktop/Talk to your AI.command"
-  printf '#!/bin/bash\nexec "%s" install\n' "$BIN_DIR/genesis" > "$launcher"
-  chmod +x "$launcher"
-fi
+MODE="$("$VPY" -m genesis_core.cli seed-mode 2>/dev/null | tr -d '[:space:]')"
 
 case ":$PATH:" in
   *":$BIN_DIR:"*) : ;;
   *) say "(the 'genesis' command lives at $BIN_DIR/genesis; add $BIN_DIR to your PATH to call it by name)" ;;
 esac
 
-# 7. flow straight into connecting a brain + the first conversation. The moment
-# the agent can talk it becomes the guide (it walks them through the key). Skips
-# cleanly on a non-interactive run where there's no one to prompt.
-say ""
-say "Your AI's home is ready. Let's wake it up..."
-say ""
-"$VPY" -m genesis_core.cli install
-
-say ""
-say "All set. From now on, just double-click 'Talk to your AI' on your Desktop."
+if [ "$MODE" = "claude-code" ]; then
+  # Mode B: Claude is the brain. init already wired it and printed how to open it
+  # in the Claude desktop app. Nothing to launch here.
+  say ""
+  say "All set. Follow the steps above to open your AI in the Claude app's 'Code' tab."
+else
+  # Mode A: a double-click "Talk to your AI" launcher, then flow straight into
+  # connecting a brain + the first conversation.
+  if [ -d "$HOME/Desktop" ]; then
+    launcher="$HOME/Desktop/Talk to your AI.command"
+    printf '#!/bin/bash\nexec "%s" install\n' "$BIN_DIR/genesis" > "$launcher"
+    chmod +x "$launcher"
+  fi
+  say ""
+  say "Your AI's home is ready. Let's wake it up..."
+  say ""
+  "$VPY" -m genesis_core.cli install
+  say ""
+  say "All set. From now on, just double-click 'Talk to your AI' on your Desktop."
+fi

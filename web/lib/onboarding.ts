@@ -77,6 +77,27 @@ export const ONBOARDING: Beat[] = [
   },
   {
     kind: "say",
+    lines: ["Good. Now, what should power your AI's thinking? You can change this later."],
+  },
+  {
+    kind: "ask",
+    record: "brain",
+    prompt: "Pick a brain.",
+    choices: [
+      {
+        label: "Free to start",
+        sublabel: "Uses Google's Gemini. Free, no account beyond a quick key. Great for trying it.",
+        value: "gemini",
+      },
+      {
+        label: "My Claude subscription",
+        sublabel: "Most capable, and it can read and write code. Needs the Claude app and a paid plan.",
+        value: "claude",
+      },
+    ],
+  },
+  {
+    kind: "say",
     lines: [
       "Got it. I'll set your AI up around that.",
       "One practical thing before you take it home.",

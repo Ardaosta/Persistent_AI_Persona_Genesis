@@ -455,6 +455,20 @@ def cmd_remember(args) -> int:
     return 0
 
 
+def cmd_seed_mode(args) -> int:
+    """Print the mode named by the GENESIS_SEED env var (or 'agent' if none/unset).
+    The installer uses this to decide whether to run the Mode-A connect-a-brain
+    step or hand off to the Claude desktop app for Mode B."""
+    import os as _os
+    from . import seed as seedmod
+    try:
+        s = seedmod.load_seed_arg(None, _os.environ.get("GENESIS_SEED"))
+        print((s or {}).get("mode") or "agent")
+    except Exception:
+        print("agent")
+    return 0
+
+
 def cmd_boot_context(args) -> int:
     """Print the boot ritual (index + recent continuity + wall-clock + handshake)
     to stdout. A Claude Code SessionStart hook calls this; its stdout is injected
@@ -695,14 +709,23 @@ def cmd_init(args) -> int:
     else:
         print("already tuned; keeping it.", file=sys.stderr)
 
+    # The mode can come from the CLI flag or, for a web onboard, from the seed.
+    mode = getattr(args, "mode", "agent") or "agent"
+    if mode == "agent" and seed and seed.get("mode"):
+        mode = seed["mode"]
+
     # Mode B: Claude Code is the brain (authed by the user's Claude subscription),
     # so there's no API key to fetch. Wire it up and point them at launching it.
-    if getattr(args, "mode", "agent") in ("claude-code", "claude", "b"):
-        out = cmd_wire_claude(_ap.Namespace(scope="project", dir=None))
-        print("\nMode B ready: Claude Code is your AI's brain, your vault is its memory.", file=sys.stderr)
-        print("Make sure Claude Code is installed and signed in, then talk to it:", file=sys.stderr)
-        print(f'  cd "{cfg.root}" && claude', file=sys.stderr)
-        return out
+    if mode in ("claude-code", "claude", "b"):
+        cmd_wire_claude(_ap.Namespace(scope="project", dir=None))
+        print("\nMode B ready: Claude is your AI's brain, your vault is its memory.", file=sys.stderr)
+        print("To talk to it in the Claude desktop app (no terminal needed):", file=sys.stderr)
+        print("  1. Open Claude and click the 'Code' tab", file=sys.stderr)
+        print("  2. Click 'Select folder' and choose this folder:", file=sys.stderr)
+        print(f"       {cfg.root}", file=sys.stderr)
+        print("  3. Start talking. It loads its memory and disciplines from there.", file=sys.stderr)
+        print(f'(Or from a terminal, if you have the CLI: cd "{cfg.root}" && claude)', file=sys.stderr)
+        return 0
 
     # 3. a brain (Mode A). The key paste is a human consent step (CONNECT_A_BRAIN.md);
     # we don't block the tuned-home setup on it. If there's no key yet, leave the
@@ -792,6 +815,10 @@ def main(argv=None) -> int:
         "boot-context",
         help="print the boot ritual (index + continuity + clock) for a SessionStart hook",
     ).set_defaults(func=cmd_boot_context)
+    sub.add_parser(
+        "seed-mode",
+        help="print the runtime mode named by GENESIS_SEED (agent|claude-code); used by the installer",
+    ).set_defaults(func=cmd_seed_mode)
     wire_p = sub.add_parser(
         "wire-claude",
         help="Mode B: wire Claude Code to run as a Genesis frontend (CLAUDE.md + boot hook)",

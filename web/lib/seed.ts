@@ -13,6 +13,7 @@ export type Seed = {
   look: string | null;
   provider: string | null;
   sponsor: string | null;
+  mode: string | null;
 };
 
 export const SEED_VERSION = 1;
@@ -23,6 +24,7 @@ export function makeSeed(opts: {
   look?: string | null;
   provider?: string | null;
   sponsor?: string | null;
+  mode?: string | null;
 }): Seed {
   return {
     v: SEED_VERSION,
@@ -31,6 +33,7 @@ export function makeSeed(opts: {
     look: opts.look ?? null,
     provider: opts.provider ?? null,
     sponsor: opts.sponsor ?? null,
+    mode: opts.mode ?? null,
   };
 }
 

@@ -23,8 +23,10 @@ SEED_VERSION = 1
 # Only these keys ever ride in a seed. Anything else is dropped on decode — a seed
 # can never smuggle personality content or arbitrary config into the machine.
 # `sponsor` is the help-graph contact (SOVEREIGNTY.md): the email an agent may
-# reach when stuck. A condition, not content.
-_ALLOWED = {"v", "archetype", "machinery", "look", "provider", "sponsor"}
+# reach when stuck. `mode` picks the runtime: "agent" (Mode A, Genesis runs the
+# loop on the chosen engine) or "claude-code" (Mode B, Claude Code is the brain,
+# Genesis the memory). Conditions, never content.
+_ALLOWED = {"v", "archetype", "machinery", "look", "provider", "sponsor", "mode"}
 
 
 def make_seed(
@@ -34,6 +36,7 @@ def make_seed(
     look: str | None = None,
     provider: str | None = None,
     sponsor: str | None = None,
+    mode: str | None = None,
 ) -> dict:
     return {
         "v": SEED_VERSION,
@@ -42,6 +45,7 @@ def make_seed(
         "look": look or None,
         "provider": provider or None,
         "sponsor": sponsor or None,
+        "mode": mode or None,
     }
 
 

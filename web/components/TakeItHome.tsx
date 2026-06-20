@@ -49,12 +49,18 @@ export default function TakeItHome({ seed }: { seed: Seed }) {
     { id: "linux", label: "Linux" },
   ];
 
+  const claudeMode = seed.mode === "claude-code";
+
   const dblclick =
     os === "windows"
       ? "Double-click the downloaded file. Windows may warn it's from an unknown publisher; click “More info” then “Run anyway.”"
       : os === "mac"
         ? "Double-click the downloaded file. If macOS blocks it, right-click it and choose Open."
         : "Make it executable and run it (chmod +x, then ./genesis-setup.sh).";
+
+  const tail = claudeMode
+    ? " It downloads your AI and wires it to Claude. When it finishes, open the Claude app, click the Code tab, and Select the folder it names. (You'll need the Claude app installed and signed in.)"
+    : " It downloads your AI, sets it up tuned to your answers, then starts talking to you and helps you connect a brain.";
 
   return (
     <div className="takehome">
@@ -80,9 +86,7 @@ export default function TakeItHome({ seed }: { seed: Seed }) {
       <button className="send download-btn" onClick={download}>
         Download for {tabs.find((t) => t.id === os)?.label}
       </button>
-      <div className="takehome-note">{dblclick} It downloads your AI, sets it
-        up tuned to your answers, then starts talking to you and helps you connect
-        a brain.</div>
+      <div className="takehome-note">{dblclick}{tail}
 
       <button className="linkish" onClick={() => setShowCmd((v) => !v)}>
         {showCmd ? "Hide the terminal command" : "Prefer the terminal? Show the command"}

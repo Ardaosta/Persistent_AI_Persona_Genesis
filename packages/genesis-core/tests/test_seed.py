@@ -119,6 +119,30 @@ class TestSeededInit(unittest.TestCase):
         # no key → did not try to schedule
         daemon.assert_not_called()
 
+    def test_seed_mode_claude_code_wires_claude(self):
+        from genesis_core import cli
+        from genesis_core import config as cfgmod
+        blob = seedmod.encode(seedmod.make_seed(
+            machinery={"proactivity": "active"},
+            archetype={"relationship": "companion", "engagement": "tinkerer",
+                       "scope": "broad", "modality": "text"},
+            provider="anthropic", mode="claude-code",
+        ))
+        real_load = cfgmod.load
+        with mock.patch.object(cfgmod, "load", lambda *a, **k: real_load(self.root)), \
+             mock.patch.object(cli, "cmd_setup_daemon") as daemon, \
+             mock.patch.object(cli, "_prompt_for_key") as keyprompt:
+            rc = cli.cmd_init(argparse.Namespace(seed=blob, mode="agent"))
+        self.assertEqual(rc, 0)
+        # Mode B wired: a project settings.json with our SessionStart hook exists
+        settings = self.root / ".claude" / "settings.json"
+        self.assertTrue(settings.is_file())
+        self.assertIn("boot-context", settings.read_text())
+        self.assertTrue((self.root / "CLAUDE.md").is_file())
+        # Mode B never asks for an API key and never schedules the Mode-A daemon
+        keyprompt.assert_not_called()
+        daemon.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
