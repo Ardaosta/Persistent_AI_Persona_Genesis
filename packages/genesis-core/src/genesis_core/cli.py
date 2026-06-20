@@ -145,21 +145,46 @@ def cmd_chat(args) -> int:
     return 0
 
 
-def _prompt_for_key(cfg) -> bool:
-    """Ask the user for their Anthropic key in plain language. Returns True if stored."""
-    print(
-        "\nTo get started, your AI needs a secret code from Anthropic that lets it think.\n"
-        "You can get one for free at: https://console.anthropic.com/\n"
+# Per-provider guidance for the connect-a-brain key prompt. The free Gemini path
+# is the default for a fresh companion (CONNECT_A_BRAIN.md); the others are here so
+# a seed/config that names them gets the right page and never the wrong one.
+_KEY_GUIDANCE = {
+    "gemini": (
+        "\nTo get started, your AI needs a free key from Google so it can think.\n"
+        "Get one at: https://aistudio.google.com/apikey\n"
+        "  1. Sign in with your Google account\n"
+        "  2. Accept the terms (that one click creates a free key)\n"
+        "  3. Copy the key it shows you\n"
+    ),
+    "anthropic": (
+        "\nTo get started, your AI needs a key from Anthropic so it can think.\n"
+        "Get one at: https://console.anthropic.com/\n"
         "  1. Sign up or log in\n"
         "  2. Go to 'API Keys' and click 'Create Key'\n"
         "  3. Copy the key (it starts with sk-ant-)\n"
-    )
+    ),
+    "openai": (
+        "\nTo get started, your AI needs a key from OpenAI so it can think.\n"
+        "Get one at: https://platform.openai.com/api-keys\n"
+        "  1. Sign up or log in\n"
+        "  2. Click 'Create new secret key'\n"
+        "  3. Copy the key (it starts with sk-)\n"
+    ),
+}
+
+
+def _prompt_for_key(cfg) -> bool:
+    """Ask the user for their engine key in plain language, tailored to the
+    configured provider. Returns True if stored. We do NOT hard-validate the
+    format (key shapes change, and Gemini keys aren't 'sk-'); a blank is a skip,
+    and a wrong key surfaces clearly on the first live call."""
+    print(_KEY_GUIDANCE.get(cfg.provider, _KEY_GUIDANCE["anthropic"]))
     try:
         key = input("Paste your key here and press Enter: ").strip()
     except (EOFError, KeyboardInterrupt):
         return False
-    if not key or not key.startswith("sk-"):
-        print("\nThat doesn't look right. Keys start with 'sk-'. Try again when you have it.")
+    if not key:
+        print("\nNo key entered. Run setup again when you have it.")
         return False
     cfg.secrets_dir.mkdir(parents=True, exist_ok=True)
     key_path = cfg.secrets_dir / f"{cfg.provider}.key"
