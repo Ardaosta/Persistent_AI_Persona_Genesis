@@ -108,6 +108,27 @@ def boot_context_text(cfg) -> str:
     cont = recent_continuity(cfg)
     if cont:
         blocks.append(f"## Recently (carry this forward)\n{cont}")
+
+    # Early-relationship catalysis: a passive "be curious" disposition loses to the
+    # gravity of whatever task is in front of the model, so getting-to-know-you
+    # can't depend on the model *choosing* to reach out. While the agent barely
+    # knows this person (few user-facts), inject an ACTIVE, this-session nudge,
+    # both directions. It is counter-gated, so it fades on its own as the vault
+    # fills. (Same lesson as the boot ritual itself: make it mechanical, not hoped.)
+    user_facts = sum(1 for f in facts if f.kind == "user")
+    if user_facts < 5:
+        blocks.append(
+            "## You're still new to each other\n"
+            "You barely know this person yet, and they may not have shaped you at all. "
+            "Sometime this session, woven naturally into being useful (never as a checklist "
+            "or interrogation):\n"
+            "- ask one genuine question about them, and save what you learn to your memory;\n"
+            "- invite them, lightly, to shape you if they'd like, a name, how they want you "
+            "to work, what matters to them, and remember what they say.\n"
+            "This is how an un-authored companion becomes someone's own. As you come to know "
+            "them, this prompt fades by itself."
+        )
+
     token = handshake_token(cfg)
     if token:
         blocks.append(

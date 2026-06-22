@@ -47,6 +47,20 @@ class TestBootContext(unittest.TestCase):
         text = boot_context_text(self.cfg)
         self.assertIn("lean long", text)
 
+    def test_early_catalysis_nudge_when_sparse(self):
+        from genesis_core.boot import boot_context_text
+        text = boot_context_text(self.cfg)  # empty vault
+        self.assertIn("still new to each other", text)
+        self.assertIn("ask one genuine question", text)
+        self.assertIn("invite them", text)  # bidirectional
+
+    def test_catalysis_fades_once_known(self):
+        from genesis_core.boot import boot_context_text
+        for i in range(5):
+            Vault(self.cfg.vault_dir).write(Fact(id=f"fact-{i}", kind="user", description=f"thing {i}"))
+        text = boot_context_text(self.cfg)
+        self.assertNotIn("still new to each other", text)  # faded
+
 
 class TestSettingsMerge(unittest.TestCase):
     def test_merge_is_idempotent(self):
