@@ -511,6 +511,33 @@ def cmd_wire_claude(args) -> int:
     return 0
 
 
+def cmd_email_sponsor(args) -> int:
+    """Email the sponsor (the help-line). The agent calls this when genuinely stuck."""
+    from . import sponsor
+    cfg = cfgmod.load()
+    try:
+        to = sponsor.send_to_sponsor(cfg, args.subject, args.body)
+    except sponsor.SponsorError as e:
+        print(f"could not email sponsor: {e}", file=sys.stderr)
+        return 1
+    print(f"sent to your sponsor ({to}). Their reply will appear in your sponsor inbox.", file=sys.stderr)
+    return 0
+
+
+def cmd_check_mail(args) -> int:
+    """Poll the sponsor inbox for replies; append new ones to sponsor_inbox.md."""
+    from . import sponsor
+    cfg = cfgmod.load()
+    try:
+        n = sponsor.check_sponsor_mail(cfg)
+    except sponsor.SponsorError as e:
+        print(f"mail check skipped: {e}", file=sys.stderr)
+        return 0  # not fatal; a poll that can't run shouldn't error the scheduler
+    if n:
+        print(f"{n} new reply(ies) from your sponsor -> {sponsor.inbox_path(cfg)}", file=sys.stderr)
+    return 0
+
+
 def cmd_capture(args) -> int:
     """Queue a soul-capture candidate (the dream adjudicates it later)."""
     from .capture import append_capture
@@ -627,6 +654,16 @@ def cmd_schedule(args) -> int:
         if st.wrapper:
             print(f"wrapper: {st.wrapper}", file=sys.stderr)
         return 0 if st.registered else 1
+    if action == "install-mail":
+        from .scheduler import install_mail_check
+        ok, detail = install_mail_check(cfg.root)
+        print(f"mail-check: {detail}", file=sys.stderr)
+        return 0 if ok else 1
+    if action == "uninstall-mail":
+        from .scheduler import uninstall_mail_check
+        ok, detail = uninstall_mail_check(cfg.root)
+        print(f"mail-check: {detail}", file=sys.stderr)
+        return 0
     if action == "uninstall":
         st = sched.uninstall()
         print(f"scheduler: {st.detail}", file=sys.stderr)
@@ -834,6 +871,11 @@ def main(argv=None) -> int:
                         help="project (a companion home dir, non-invasive) or user (everywhere)")
     wire_p.add_argument("--dir", default=None, help="companion home dir for project scope (default: the Genesis home)")
     wire_p.set_defaults(func=cmd_wire_claude)
+    es_p = sub.add_parser("email-sponsor", help="email your sponsor for help when genuinely stuck")
+    es_p.add_argument("subject", help="short subject line")
+    es_p.add_argument("body", help="the message (summarize the problem; never paste private memory)")
+    es_p.set_defaults(func=cmd_email_sponsor)
+    sub.add_parser("check-mail", help="poll the sponsor inbox for replies (used by the 10-min schedule)").set_defaults(func=cmd_check_mail)
     cap_p = sub.add_parser("capture", help="queue a soul-capture candidate (the dream adjudicates it)")
     cap_p.add_argument("text", help="the thing that struck you, in your own words")
     cap_p.add_argument("--why", default="", help="optional: which part of you it touches")
@@ -848,7 +890,7 @@ def main(argv=None) -> int:
     )
     sched_p.add_argument(
         "action", nargs="?", default="status",
-        choices=["status", "pause", "resume", "install", "uninstall"],
+        choices=["status", "pause", "resume", "install", "uninstall", "install-mail", "uninstall-mail"],
         help="what to do (default: status)",
     )
     sched_p.set_defaults(func=cmd_schedule)
