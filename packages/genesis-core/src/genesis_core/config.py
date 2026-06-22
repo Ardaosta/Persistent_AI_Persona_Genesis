@@ -63,6 +63,7 @@ class GenesisConfig:
     allowed_email_recipients: list = None  # defaults to _DEFAULT_EMAIL_RECIPIENTS
     trains: bool | None = None  # None → derive from provider (fail-closed)
     machinery: dict = None  # onboarding-derived MachineryProfile (proactivity/autonomy/memory/surface)
+    sponsor_sender: str | None = None  # the email account the agent sends sponsor mail FROM
 
     def __post_init__(self):
         if self.allowed_email_recipients is None:
@@ -154,6 +155,7 @@ def load(root: Path | None = None) -> GenesisConfig:
         allowed_email_recipients=recipients,
         trains=trains if isinstance(trains, bool) else None,
         machinery=machinery,
+        sponsor_sender=data.get("sponsor_sender"),
     )
 
 
