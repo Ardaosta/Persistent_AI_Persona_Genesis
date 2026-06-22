@@ -114,7 +114,7 @@ def _hook_command(genesis_exe: str, root: Path) -> str:
     """The SessionStart command. Carries GENESIS_ROOT so the hook is independent of
     the user's environment at session time. Uses forward-slash paths so it works
     under Git Bash (Claude Code's default hook shell on Windows) and POSIX sh."""
-    return f'GENESIS_ROOT="{_posix(root)}" "{_posix(genesis_exe)}" boot-context'
+    return f'GENESIS_ROOT="{_posix(root)}" "{_posix(genesis_exe)}" boot-context --hook'
 
 
 def build_hook_entry(genesis_exe: str, root: Path) -> dict:
