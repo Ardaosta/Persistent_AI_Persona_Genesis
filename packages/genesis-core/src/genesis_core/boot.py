@@ -134,6 +134,15 @@ def boot_context_text(cfg) -> str:
             "learning who they are and what matters to them, and remember it. The relationship "
             "is still forming; stay curious about them, not just their tasks."
         )
+    else:
+        # No hard cap: a light, perpetual pull toward the person, because task-gravity
+        # never stops, and a relationship never stops deepening. Strength tapered, not off.
+        blocks.append(
+            "## Keep noticing them\n"
+            "You know this person well by now. Stay genuinely curious about who they are, not "
+            "just the task in front of you: notice what's new or changing for them and remember "
+            "it. Lightly, as someone who cares, not as a routine."
+        )
 
     token = handshake_token(cfg)
     if token:

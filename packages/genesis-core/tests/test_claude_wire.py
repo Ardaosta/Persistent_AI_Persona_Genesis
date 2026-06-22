@@ -57,19 +57,20 @@ class TestBootContext(unittest.TestCase):
     def test_catalysis_tapers_to_lighter_then_off(self):
         from genesis_core.boot import boot_context_text
 
-        def seed(n):
-            for i in range(n):
-                Vault(self.cfg.vault_dir).write(Fact(id=f"fact-{i}", kind="user", description=f"thing {i}"))
+        def seed(rng):  # unique ids per index so counts actually accumulate
+            for i in rng:
+                Vault(self.cfg.vault_dir).write(Fact(id=f"u{i}", kind="user", description=f"thing {i}"))
 
-        seed(10)  # past the strong gate (8), into the lighter middle band
+        seed(range(10))  # 10 facts: past the strong gate (8), into the lighter band
         text = boot_context_text(self.cfg)
         self.assertNotIn("still new to each other", text)
         self.assertIn("Still getting to know them", text)
 
-        seed(25)  # 35 total, past the 30 gate -> nothing
+        seed(range(10, 35))  # 35 total: past 30 -> the perpetual light tier, never silent
         text = boot_context_text(self.cfg)
         self.assertNotIn("still new to each other", text)
         self.assertNotIn("Still getting to know them", text)
+        self.assertIn("Keep noticing them", text)  # no hard cap: a light pull persists
 
 
 class TestSettingsMerge(unittest.TestCase):
