@@ -474,8 +474,19 @@ def cmd_boot_context(args) -> int:
     to stdout. A Claude Code SessionStart hook calls this; its stdout is injected
     into context before turn 1, so identity-load is harness-enforced."""
     from .boot import boot_context_text
+    from datetime import datetime as _dt
     cfg = cfgmod.load()
-    print(boot_context_text(cfg))
+    text = boot_context_text(cfg)
+    # Diagnostic: log each run + its source so we can tell whether the SessionStart
+    # hook actually fires (source=hook) vs the agent self-running it (source=manual).
+    try:
+        src = "hook" if getattr(args, "hook", False) else "manual"
+        cfg.root.mkdir(parents=True, exist_ok=True)
+        with (cfg.root / "boot-context.log").open("a", encoding="utf-8") as fh:
+            fh.write(f"{_dt.now().astimezone().isoformat()} source={src}\n")
+    except Exception:
+        pass
+    print(text)
     return 0
 
 
@@ -855,10 +866,12 @@ def main(argv=None) -> int:
     rem_p.add_argument("--desc", required=True, help="one line; this is what shows in the index")
     rem_p.add_argument("--body", default="", help="optional longer detail")
     rem_p.set_defaults(func=cmd_remember)
-    sub.add_parser(
+    bc_p = sub.add_parser(
         "boot-context",
         help="print the boot ritual (index + continuity + clock) for a SessionStart hook",
-    ).set_defaults(func=cmd_boot_context)
+    )
+    bc_p.add_argument("--hook", action="store_true", help="mark this as the SessionStart hook invocation (for diagnostics)")
+    bc_p.set_defaults(func=cmd_boot_context)
     sub.add_parser(
         "seed-mode",
         help="print the runtime mode named by GENESIS_SEED (agent|claude-code); used by the installer",
