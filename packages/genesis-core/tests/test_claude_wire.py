@@ -61,16 +61,19 @@ class TestBootContext(unittest.TestCase):
             for i in rng:
                 Vault(self.cfg.vault_dir).write(Fact(id=f"u{i}", kind="user", description=f"thing {i}"))
 
-        seed(range(10))  # 10 facts: past the strong gate (8), into the lighter band
+        seed(range(15))  # 15 facts: still under the strong gate (20)
+        text = boot_context_text(self.cfg)
+        self.assertIn("still new to each other", text)  # strong runway is wide on purpose
+
+        seed(range(15, 25))  # 25 facts: past 20 -> lighter band
         text = boot_context_text(self.cfg)
         self.assertNotIn("still new to each other", text)
         self.assertIn("Still getting to know them", text)
 
-        seed(range(10, 35))  # 35 total: past 30 -> the perpetual light tier, never silent
+        seed(range(25, 45))  # 45 facts: past 40 -> the perpetual light tier, never silent
         text = boot_context_text(self.cfg)
-        self.assertNotIn("still new to each other", text)
         self.assertNotIn("Still getting to know them", text)
-        self.assertIn("Keep noticing them", text)  # no hard cap: a light pull persists
+        self.assertIn("Keep noticing them", text)
 
 
 class TestSettingsMerge(unittest.TestCase):

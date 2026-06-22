@@ -116,7 +116,11 @@ def boot_context_text(cfg) -> str:
     # both directions. It is counter-gated, so it fades on its own as the vault
     # fills. (Same lesson as the boot ritual itself: make it mechanical, not hoped.)
     user_facts = sum(1 for f in facts if f.kind == "user")
-    if user_facts < 8:
+    # Bands are wide on purpose: the STRONG tier is the *collection* phase. You
+    # can't curate what was never gathered, so keep actively gathering for a long
+    # runway (~20 facts) before easing off; the dream's job is to promote/demote
+    # later, but only if the raw material exists. (Larame, 2026-06-22.)
+    if user_facts < 20:
         blocks.append(
             "## You're still new to each other\n"
             "You don't know this person well yet, and they may not have shaped you at all. "
@@ -127,7 +131,7 @@ def boot_context_text(cfg) -> str:
             "remember what they say. This is how an un-authored companion becomes someone's "
             "own. Do it every early session until you genuinely know them."
         )
-    elif user_facts < 30:
+    elif user_facts < 40:
         blocks.append(
             "## Still getting to know them\n"
             "You know this person somewhat, but not deeply. When it fits naturally, keep "
