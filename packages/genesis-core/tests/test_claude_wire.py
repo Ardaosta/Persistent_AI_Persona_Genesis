@@ -51,15 +51,25 @@ class TestBootContext(unittest.TestCase):
         from genesis_core.boot import boot_context_text
         text = boot_context_text(self.cfg)  # empty vault
         self.assertIn("still new to each other", text)
-        self.assertIn("ask one genuine question", text)
+        self.assertIn("ask at least one genuine question", text)
         self.assertIn("invite them", text)  # bidirectional
 
-    def test_catalysis_fades_once_known(self):
+    def test_catalysis_tapers_to_lighter_then_off(self):
         from genesis_core.boot import boot_context_text
-        for i in range(5):
-            Vault(self.cfg.vault_dir).write(Fact(id=f"fact-{i}", kind="user", description=f"thing {i}"))
+
+        def seed(n):
+            for i in range(n):
+                Vault(self.cfg.vault_dir).write(Fact(id=f"fact-{i}", kind="user", description=f"thing {i}"))
+
+        seed(10)  # past the strong gate (8), into the lighter middle band
         text = boot_context_text(self.cfg)
-        self.assertNotIn("still new to each other", text)  # faded
+        self.assertNotIn("still new to each other", text)
+        self.assertIn("Still getting to know them", text)
+
+        seed(25)  # 35 total, past the 30 gate -> nothing
+        text = boot_context_text(self.cfg)
+        self.assertNotIn("still new to each other", text)
+        self.assertNotIn("Still getting to know them", text)
 
 
 class TestSettingsMerge(unittest.TestCase):

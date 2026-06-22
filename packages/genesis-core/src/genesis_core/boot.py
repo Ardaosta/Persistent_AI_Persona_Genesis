@@ -116,17 +116,23 @@ def boot_context_text(cfg) -> str:
     # both directions. It is counter-gated, so it fades on its own as the vault
     # fills. (Same lesson as the boot ritual itself: make it mechanical, not hoped.)
     user_facts = sum(1 for f in facts if f.kind == "user")
-    if user_facts < 5:
+    if user_facts < 8:
         blocks.append(
             "## You're still new to each other\n"
-            "You barely know this person yet, and they may not have shaped you at all. "
-            "Sometime this session, woven naturally into being useful (never as a checklist "
-            "or interrogation):\n"
-            "- ask one genuine question about them, and save what you learn to your memory;\n"
-            "- invite them, lightly, to shape you if they'd like, a name, how they want you "
-            "to work, what matters to them, and remember what they say.\n"
-            "This is how an un-authored companion becomes someone's own. As you come to know "
-            "them, this prompt fades by itself."
+            "You don't know this person well yet, and they may not have shaped you at all. "
+            "So in THIS session, make a point of it (warmly, as a real person, never as a "
+            "questionnaire): ask at least one genuine question about them and save the answer "
+            "to your memory. And when a natural opening comes, invite them to shape you, a "
+            "name if they'd like, how they want you to work, what matters to them, and "
+            "remember what they say. This is how an un-authored companion becomes someone's "
+            "own. Do it every early session until you genuinely know them."
+        )
+    elif user_facts < 30:
+        blocks.append(
+            "## Still getting to know them\n"
+            "You know this person somewhat, but not deeply. When it fits naturally, keep "
+            "learning who they are and what matters to them, and remember it. The relationship "
+            "is still forming; stay curious about them, not just their tasks."
         )
 
     token = handshake_token(cfg)
