@@ -549,6 +549,34 @@ def cmd_check_mail(args) -> int:
     return 0
 
 
+def cmd_sylph(args) -> int:
+    """Sylph: the outward learning loop. Research a thread the person cares about
+    on the live web and write a cited finding to vault/findings/."""
+    from . import sylph
+    cfg = cfgmod.load()
+    if getattr(args, "add", None):
+        added = sylph.add_interest(cfg, args.add)
+        print(f"{'added' if added else 'already tracking'}: {args.add}", file=sys.stderr)
+        return 0
+    if getattr(args, "list", False):
+        topics = sylph.read_interests(cfg)
+        print("\n".join(f"- {t}" for t in topics) if topics else "(no interests yet; add with --add)")
+        return 0
+    try:
+        out = sylph.run_cycle(cfg, topic=getattr(args, "topic", None))
+    except sylph.SylphError as e:
+        print(f"sylph: {e}", file=sys.stderr)
+        return 1
+    if out is None:
+        print("sylph: nothing to chase (no interests, or no real finding this cycle)", file=sys.stderr)
+        return 0
+    print(f"[sylph] {out['topic']} -> {out['path']}", file=sys.stderr)
+    print(out["finding"])
+    if out.get("source"):
+        print(f"source: {out['source']}")
+    return 0
+
+
 def cmd_capture(args) -> int:
     """Queue a soul-capture candidate (the dream adjudicates it later)."""
     from .capture import append_capture
@@ -889,6 +917,11 @@ def main(argv=None) -> int:
     es_p.add_argument("body", help="the message (summarize the problem; never paste private memory)")
     es_p.set_defaults(func=cmd_email_sponsor)
     sub.add_parser("check-mail", help="poll the sponsor inbox for replies (used by the 10-min schedule)").set_defaults(func=cmd_check_mail)
+    sy_p = sub.add_parser("sylph", help="outward learning: research a thread you care about on the live web")
+    sy_p.add_argument("--topic", default=None, help="research this specific topic (default: next from your interests)")
+    sy_p.add_argument("--add", default=None, help="add a topic to your interests watch-list")
+    sy_p.add_argument("--list", action="store_true", help="list your interests")
+    sy_p.set_defaults(func=cmd_sylph)
     cap_p = sub.add_parser("capture", help="queue a soul-capture candidate (the dream adjudicates it)")
     cap_p.add_argument("text", help="the thing that struck you, in your own words")
     cap_p.add_argument("--why", default="", help="optional: which part of you it touches")
