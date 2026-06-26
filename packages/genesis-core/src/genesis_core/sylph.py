@@ -103,12 +103,24 @@ RESEARCH_PROMPT = (
 )
 
 
-def _research(topic: str, *, cwd: Path, timeout: int = 200) -> str:
+def oauth_token(cfg) -> str | None:
+    """A durable Claude subscription token (from `claude setup-token`), for reliable
+    headless/scheduled auth. Stored in secrets, never the vault."""
+    p = cfg.secrets_dir / "claude_oauth_token"
+    if p.is_file():
+        t = p.read_text(encoding="utf-8").strip()
+        return t or None
+    return None
+
+
+def _research(topic: str, *, cwd: Path, timeout: int = 200, token: str | None = None) -> str:
     """One headless claude-on-subscription web-research turn. Returns the raw result
     text (the FINDING|SOURCE|WHY line, or NONE)."""
     env = dict(os.environ)
     env.pop("ANTHROPIC_API_KEY", None)   # force subscription auth (apiKeySource null)
     env.pop("ANTHROPIC_AUTH_TOKEN", None)
+    if token:
+        env["CLAUDE_CODE_OAUTH_TOKEN"] = token   # durable subscription auth for scheduled runs
     try:
         r = subprocess.run(
             [claude_bin(), "-p", RESEARCH_PROMPT.format(topic=topic),
@@ -301,7 +313,7 @@ def run_cycle(cfg, topic: str | None = None) -> dict | None:
     topic = topic or _next_topic(cfg, read_interests(cfg))
     if not topic:
         return None
-    raw = _research(topic, cwd=cfg.root)
+    raw = _research(topic, cwd=cfg.root, token=oauth_token(cfg))
     if not raw or raw.strip().upper() == "NONE":
         _log(cfg, f"no-find: {topic}")
         return None
