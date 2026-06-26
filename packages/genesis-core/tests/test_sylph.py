@@ -106,5 +106,48 @@ class TestRunCycle(unittest.TestCase):
         research.assert_not_called()  # nothing to chase -> never calls the engine
 
 
+class TestSurfacingAndPromote(unittest.TestCase):
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.cfg = cfgmod.GenesisConfig(root=Path(self._td.name))
+        self.cfg.vault_dir.mkdir(parents=True)
+        self.cfg.findings_dir.mkdir(parents=True)
+        (self.cfg.findings_dir / "2026-06-24-old.md").write_text("# old\n\n**Finding:** old thing\n\n**Source:** https://e/o\n")
+        (self.cfg.findings_dir / "2026-06-25-new.md").write_text("# new\n\n**Finding:** new thing\n\n**Source:** https://e/n\n")
+
+    def tearDown(self):
+        self._td.cleanup()
+
+    def test_pending_is_newest_then_advances(self):
+        p, body = sylph.pending_finding(self.cfg)
+        self.assertEqual(p.name, "2026-06-25-new.md")  # newest first
+        sylph.mark_surfaced(self.cfg, p)
+        p2, _ = sylph.pending_finding(self.cfg)
+        self.assertEqual(p2.name, "2026-06-24-old.md")  # advanced to the next
+        sylph.mark_surfaced(self.cfg, p2)
+        self.assertIsNone(sylph.pending_finding(self.cfg))  # all surfaced -> none
+
+    def test_boot_context_surfaces_a_finding(self):
+        from genesis_core.boot import boot_context_text
+        text = boot_context_text(self.cfg)
+        self.assertIn("Something I found for them", text)
+        self.assertIn("new thing", text)  # the newest pending finding's content
+
+    def test_remove_interest(self):
+        sylph.add_interest(self.cfg, "Hypershell")
+        sylph.add_interest(self.cfg, "ISY automation")
+        self.assertTrue(sylph.remove_interest(self.cfg, "isy"))   # loose match
+        self.assertEqual(sylph.read_interests(self.cfg), ["Hypershell"])
+
+    def test_promote_makes_reference_fact(self):
+        from genesis_memory import Vault
+        fid = sylph.promote_finding(self.cfg, self.cfg.findings_dir / "2026-06-25-new.md")
+        self.assertTrue(fid.startswith("sylph-"))
+        fact = Vault(self.cfg.vault_dir).get(fid)
+        self.assertIsNotNone(fact)
+        self.assertEqual(fact.kind, "reference")
+        self.assertIn("new thing", fact.description)
+
+
 if __name__ == "__main__":
     unittest.main()
