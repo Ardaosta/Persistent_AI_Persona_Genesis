@@ -19,7 +19,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from genesis_backend import AnthropicBackend, GeminiBackend, OpenAIBackend
+from genesis_backend import AnthropicBackend, ClaudeCLIBackend, GeminiBackend, OpenAIBackend
 
 ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-4-6"
 GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
@@ -36,8 +36,9 @@ _KEY_ENV = {
 # (assume training). A user on a paid/non-training tier can override in config.json
 # with {"engine_trains": false}. This gates whether the agent will deepen into
 # private memory (SAFETY #3 / dogfood finding): never pour a life into an engine that
-# will read the depth.
-_TRAINS_DEFAULT = {"anthropic": False, "openai": False, "gemini": True}
+# will read the depth. claude-cli runs on a private subscription (no training tier),
+# so it is non-training like the paid APIs.
+_TRAINS_DEFAULT = {"anthropic": False, "openai": False, "gemini": True, "claude-cli": False}
 
 
 def default_root() -> Path:
@@ -125,6 +126,11 @@ class GenesisConfig:
         return v.strip() if v else None
 
     def build_backend(self):
+        # claude-cli authenticates with the Claude subscription via the `claude`
+        # CLI itself (keychain OAuth, or a durable setup-token for headless runs),
+        # so it needs no API key at all.
+        if self.provider == "claude-cli":
+            return ClaudeCLIBackend(root=self.root, model=self.model or "")
         key = self.load_key()
         if not key:
             raise RuntimeError(f"no key for '{self.provider}' (looked in {self.key_path} and env)")
