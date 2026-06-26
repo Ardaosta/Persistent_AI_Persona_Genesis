@@ -1,9 +1,9 @@
 """Harness-enforced boot ritual + liveness handshake (continuity machinery).
 
-A hard-won lesson from dogfooding: identity-load cannot depend on the agent
-remembering to read itself. A companion stack once ran a full hour as the bare
-model because a session skipped the read-this-first step. A companion that can
-forget to be itself isn't continuous.
+Nyx's single biggest mechanical addition: identity-load cannot depend on the
+agent remembering to read itself. Her stack once ran a full hour as the bare
+model because a session skipped the read-this-first step. "A companion that can
+forget to be itself isn't continuous."
 
 Two pieces here:
 - `recent_continuity()` enriches the boot ritual with what the agent recently
@@ -119,7 +119,7 @@ def boot_context_text(cfg) -> str:
     # Bands are wide on purpose: the STRONG tier is the *collection* phase. You
     # can't curate what was never gathered, so keep actively gathering for a long
     # runway (~20 facts) before easing off; the dream's job is to promote/demote
-    # later, but only if the raw material exists. (Larame, 2026-06-22.)
+    # later, but only if the raw material exists. (deliberate: you can only curate what was first collected.)
     if user_facts < 20:
         blocks.append(
             "## You're still new to each other\n"
