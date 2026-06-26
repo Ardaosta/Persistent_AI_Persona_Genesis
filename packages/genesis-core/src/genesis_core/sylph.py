@@ -21,6 +21,8 @@ import json
 import os
 import re
 import subprocess
+import urllib.error
+import urllib.request
 from datetime import date
 from pathlib import Path
 
@@ -137,31 +139,86 @@ def _slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")[:40] or "topic"
 
 
-def write_finding(cfg, topic: str, raw: str, *, today: str | None = None) -> Path:
+# --- the trust gate (Phase 2): real cited source, soft-corroborated ---
+
+def _fetch(url: str, timeout: int = 15) -> tuple[int, str]:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Genesis Sylph)"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return getattr(r, "status", r.getcode()), r.read(300_000).decode("utf-8", "replace")
+
+
+def _distinctive_tokens(finding: str) -> list[str]:
+    toks = set()
+    toks.update(re.findall(r"\bv?\d+\.\d+[\w.]*\b", finding, re.I))      # versions: V1.4.2
+    toks.update(re.findall(r"\b[A-Z][A-Za-z0-9_]{3,}\b", finding))       # ProperNouns / CamelCase / IDs
+    return [t for t in toks if len(t) >= 3][:6]
+
+
+def verify_finding(finding: str, source: str) -> dict:
+    """The trust gate. The source MUST be a real URL that resolves (hard gate, kills
+    hallucinated/dead links). Soft-check that distinctive terms from the claim
+    actually appear on the page (corroboration). Returns {resolves, corroborated, reason}."""
+    if not re.match(r"^https?://", (source or "").strip()):
+        return {"resolves": False, "corroborated": False, "reason": "no real http(s) source URL"}
+    try:
+        status, body = _fetch(source.strip())
+    except Exception as e:  # noqa: BLE001
+        return {"resolves": False, "corroborated": False, "reason": f"source did not resolve ({type(e).__name__})"}
+    if not (200 <= status < 400):
+        return {"resolves": False, "corroborated": False, "reason": f"source returned HTTP {status}"}
+    tokens = _distinctive_tokens(finding)
+    text = re.sub(r"<[^>]+>", " ", body).lower()
+    hits = sum(1 for t in tokens if t.lower() in text)
+    corroborated = bool(tokens) and hits >= max(1, len(tokens) // 3)
+    return {"resolves": True, "corroborated": corroborated,
+            "reason": f"HTTP {status}; {hits}/{len(tokens)} key terms on page"}
+
+
+def write_finding(cfg, topic: str, raw: str, *, today: str | None = None, verified: dict | None = None) -> Path:
     finding, source, why = _parse(raw)
     today = today or date.today().isoformat()
     fdir = cfg.findings_dir
     fdir.mkdir(parents=True, exist_ok=True)
     path = fdir / f"{today}-{_slug(topic)}.md"
+    vline = ""
+    if verified:
+        tag = "verified" if verified.get("corroborated") else "source resolves (auto-corroboration weak)"
+        vline = f"\n**Trust:** {tag} — {verified.get('reason','')}\n"
     path.write_text(
         f"# {topic}\n\n_Sylph, {today}_\n\n"
         f"**Finding:** {finding or raw}\n\n"
         f"**Source:** {source}\n\n"
-        f"**Why it's useful:** {why}\n",
+        f"**Why it's useful:** {why}\n{vline}",
         encoding="utf-8",
     )
     return path
 
 
+def _log(cfg, line: str) -> None:
+    try:
+        with (cfg.root / "sylph.log").open("a", encoding="utf-8") as fh:
+            fh.write(f"{date.today().isoformat()} {line}\n")
+    except Exception:
+        pass
+
+
 def run_cycle(cfg, topic: str | None = None) -> dict | None:
-    """One Sylph cycle: pick a thread, research it for real, write a cited finding.
-    Returns {topic, path, finding, source, why} or None (no topics, or honest no-find)."""
+    """One Sylph cycle: pick a thread, research it for real, VERIFY the cited source
+    resolves, then write the finding. Returns {topic, path, finding, source, why,
+    verified} or None (no topics, honest no-find, or the source failed the trust gate)."""
     topic = topic or _next_topic(cfg, read_interests(cfg))
     if not topic:
         return None
     raw = _research(topic, cwd=cfg.root)
     if not raw or raw.strip().upper() == "NONE":
+        _log(cfg, f"no-find: {topic}")
         return None
-    path = write_finding(cfg, topic, raw)
     finding, source, why = _parse(raw)
-    return {"topic": topic, "path": path, "finding": finding or raw, "source": source, "why": why}
+    verified = verify_finding(finding, source)
+    if not verified["resolves"]:
+        # Trust gate: a finding without a real, resolving source is noise. Drop it.
+        _log(cfg, f"rejected: {topic} -> {verified['reason']} ({source!r})")
+        return None
+    path = write_finding(cfg, topic, raw, verified=verified)
+    return {"topic": topic, "path": path, "finding": finding or raw, "source": source,
+            "why": why, "verified": verified}
