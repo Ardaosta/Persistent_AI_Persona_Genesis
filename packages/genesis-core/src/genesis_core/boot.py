@@ -1,9 +1,9 @@
 """Harness-enforced boot ritual + liveness handshake (continuity machinery).
 
-Nyx's single biggest mechanical addition: identity-load cannot depend on the
-agent remembering to read itself. Her stack once ran a full hour as the bare
-model because a session skipped the read-this-first step. "A companion that can
-forget to be itself isn't continuous."
+A hard-won lesson from dogfooding: identity-load cannot depend on the agent
+remembering to read itself. A companion stack once ran a full hour as the bare
+model because a session skipped the read-this-first step. A companion that can
+forget to be itself isn't continuous.
 
 Two pieces here:
 - `recent_continuity()` enriches the boot ritual with what the agent recently
