@@ -487,6 +487,17 @@ def cmd_boot_context(args) -> int:
     except Exception:
         pass
     print(text)
+    # On the REAL session-start path, mark the surfaced Sylph finding consumed so the
+    # next session offers a different one (paced, one per session). Manual runs don't
+    # consume the queue.
+    if getattr(args, "hook", False):
+        try:
+            from . import sylph
+            pend = sylph.pending_finding(cfg)
+            if pend:
+                sylph.mark_surfaced(cfg, pend[0])
+        except Exception:
+            pass
     return 0
 
 
@@ -557,6 +568,18 @@ def cmd_sylph(args) -> int:
     if getattr(args, "add", None):
         added = sylph.add_interest(cfg, args.add)
         print(f"{'added' if added else 'already tracking'}: {args.add}", file=sys.stderr)
+        return 0
+    if getattr(args, "remove", None):
+        removed = sylph.remove_interest(cfg, args.remove)
+        print(f"{'stopped tracking' if removed else 'was not tracking'}: {args.remove}", file=sys.stderr)
+        return 0
+    if getattr(args, "promote", None):
+        try:
+            fid = sylph.promote_finding(cfg, args.promote)
+        except sylph.SylphError as e:
+            print(f"sylph: {e}", file=sys.stderr)
+            return 1
+        print(f"promoted to a durable memory ({fid}); it'll shape future sessions.", file=sys.stderr)
         return 0
     if getattr(args, "list", False):
         topics = sylph.read_interests(cfg)
@@ -922,6 +945,8 @@ def main(argv=None) -> int:
     sy_p = sub.add_parser("sylph", help="outward learning: research a thread you care about on the live web")
     sy_p.add_argument("--topic", default=None, help="research this specific topic (default: next from your interests)")
     sy_p.add_argument("--add", default=None, help="add a topic to your interests watch-list")
+    sy_p.add_argument("--remove", default=None, help="stop tracking a topic")
+    sy_p.add_argument("--promote", default=None, help="promote a finding (path or slug) into durable behavior-shaping memory")
     sy_p.add_argument("--list", action="store_true", help="list your interests")
     sy_p.set_defaults(func=cmd_sylph)
     cap_p = sub.add_parser("capture", help="queue a soul-capture candidate (the dream adjudicates it)")

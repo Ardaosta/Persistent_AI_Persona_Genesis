@@ -183,7 +183,7 @@ def write_finding(cfg, topic: str, raw: str, *, today: str | None = None, verifi
     vline = ""
     if verified:
         tag = "verified" if verified.get("corroborated") else "source resolves (auto-corroboration weak)"
-        vline = f"\n**Trust:** {tag} — {verified.get('reason','')}\n"
+        vline = f"\n**Trust:** {tag} ({verified.get('reason','')})\n"
     path.write_text(
         f"# {topic}\n\n_Sylph, {today}_\n\n"
         f"**Finding:** {finding or raw}\n\n"
@@ -200,6 +200,75 @@ def _log(cfg, line: str) -> None:
             fh.write(f"{date.today().isoformat()} {line}\n")
     except Exception:
         pass
+
+
+# --- Phase 3: paced surfacing + watch-list tuning ---
+
+def _surfaced_ledger(cfg) -> Path:
+    return cfg.root / "sylph_surfaced.txt"
+
+
+def _surfaced_set(cfg) -> set[str]:
+    p = _surfaced_ledger(cfg)
+    return set(p.read_text(encoding="utf-8").split()) if p.exists() else set()
+
+
+def pending_finding(cfg):
+    """The newest finding not yet surfaced to the person. Returns (path, body) or None.
+    Findings are date-prefixed, so reverse-sorted name == newest-first."""
+    fdir = cfg.findings_dir
+    if not fdir.is_dir():
+        return None
+    done = _surfaced_set(cfg)
+    files = sorted((f for f in fdir.glob("*.md") if f.name not in done), reverse=True)
+    if not files:
+        return None
+    f = files[0]
+    return f, f.read_text(encoding="utf-8")
+
+
+def mark_surfaced(cfg, path) -> None:
+    led = _surfaced_ledger(cfg)
+    led.parent.mkdir(parents=True, exist_ok=True)
+    with led.open("a", encoding="utf-8") as fh:
+        fh.write(Path(path).name + "\n")
+
+
+def remove_interest(cfg, topic: str) -> bool:
+    """Stop tracking a topic ('stop tracking X'). Matches loosely. Returns True if removed."""
+    t = topic.strip().lower()
+    topics = read_interests(cfg)
+    kept = [x for x in topics if t != x.lower() and t not in x.lower()]
+    if len(kept) == len(topics):
+        return False
+    p = interests_path(cfg)
+    p.write_text("# Things to keep an eye on for this person\n\n" + "".join(f"- {x}\n" for x in kept), encoding="utf-8")
+    ptr = cfg.root / "sylph_ptr.txt"
+    if ptr.exists():
+        ptr.write_text("0", encoding="utf-8")
+    return True
+
+
+# --- Phase 4: close the loop to behavior ---
+
+def promote_finding(cfg, finding_path) -> str:
+    """Turn a valued finding into a durable `reference` fact so it loads at boot and
+    actually shapes future turns. This is the collection -> memory -> changed-practice
+    hop: the difference between the agent 'knowing more' and being 'better'."""
+    from genesis_memory import Fact, Vault
+    p = Path(finding_path)
+    if not p.is_file():
+        # allow passing a slug/name instead of a full path
+        cand = list(cfg.findings_dir.glob(f"*{Path(finding_path).stem}*.md")) if cfg.findings_dir.is_dir() else []
+        if not cand:
+            raise SylphError(f"no finding found for {finding_path!r}")
+        p = cand[0]
+    body = p.read_text(encoding="utf-8")
+    m = re.search(r"\*\*Finding:\*\*\s*(.+)", body)
+    desc = " ".join((m.group(1).strip() if m else p.stem).split())[:180]
+    fid = ("sylph-" + _slug(re.sub(r"^\d{4}-\d{2}-\d{2}-", "", p.stem)))[:58]
+    Vault(cfg.vault_dir).write(Fact(id=fid, kind="reference", description=desc, body=body))
+    return fid
 
 
 def run_cycle(cfg, topic: str | None = None) -> dict | None:

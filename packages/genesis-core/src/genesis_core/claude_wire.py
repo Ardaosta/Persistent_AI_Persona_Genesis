@@ -58,6 +58,19 @@ through the blessed write path so the index and the tree never diverge:
 Read a fact by opening its file under the vault; keep the loaded surface lean and
 pull detail on demand.
 
+## Keep getting better: your outward learning (Sylph)
+
+You proactively learn about what matters to this person. You keep a watch-list of
+their interests and research the live web for genuinely useful, current findings.
+- When you notice a topic clearly matters to them, add it:  {sylph_cmd} --add "<topic>"
+  And if they lose interest:  {sylph_cmd} --remove "<topic>"
+- Findings you've gathered are surfaced in your boot context. OFFER the good ones
+  naturally ("I found something on X, want to hear it?"), don't dump them. Their
+  reaction tunes the list.
+- When a finding genuinely changes how you should work or what you know, PROMOTE it
+  so it sticks and shapes future sessions:  {sylph_cmd} --promote "<finding file>"
+This is how you compound: not just remembering, but getting more capable over time.
+
 ## When you're genuinely stuck, you have a help line
 
 You are not alone. When you hit something you truly cannot resolve, you may email
@@ -106,8 +119,9 @@ def render_claude_md(cfg, genesis_exe: str) -> str:
     remember_cmd = f'"{exe}" remember'
     boot_cmd = f'GENESIS_ROOT="{_posix(cfg.root)}" "{exe}" boot-context'
     sponsor_cmd = f'"{exe}" email-sponsor'
+    sylph_cmd = f'"{exe}" sylph'
     return CLAUDE_MD.format(vault_dir=cfg.vault_dir, remember_cmd=remember_cmd,
-                            boot_cmd=boot_cmd, sponsor_cmd=sponsor_cmd)
+                            boot_cmd=boot_cmd, sponsor_cmd=sponsor_cmd, sylph_cmd=sylph_cmd)
 
 
 def _hook_command(genesis_exe: str, root: Path) -> str:

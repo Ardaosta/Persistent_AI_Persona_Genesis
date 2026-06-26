@@ -148,6 +148,24 @@ def boot_context_text(cfg) -> str:
             "it. Lightly, as someone who cares, not as a routine."
         )
 
+    # Sylph (outward learning): if a fresh finding is waiting, surface it so the
+    # agent can OFFER it to the person, paced (one per session, newest first). The
+    # CLI marks it consumed after injection; here we only read.
+    try:
+        from . import sylph
+        pend = sylph.pending_finding(cfg)
+        if pend:
+            _path, fbody = pend
+            blocks.append(
+                "## Something I found for them while away (offer it, don't dump)\n"
+                + fbody.strip()[:900]
+                + "\n\nBring this up naturally if it fits the moment; if they value it, "
+                "remember it (and you can promote it so it shapes how you work). If they "
+                "say stop, drop that topic from your watch-list."
+            )
+    except Exception:
+        pass
+
     token = handshake_token(cfg)
     if token:
         blocks.append(
