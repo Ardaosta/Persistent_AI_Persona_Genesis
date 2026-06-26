@@ -574,6 +574,8 @@ def cmd_sylph(args) -> int:
     print(out["finding"])
     if out.get("source"):
         print(f"source: {out['source']}")
+    v = out.get("verified") or {}
+    print(f"trust: {'verified' if v.get('corroborated') else 'source resolves'} ({v.get('reason','')})", file=sys.stderr)
     return 0
 
 

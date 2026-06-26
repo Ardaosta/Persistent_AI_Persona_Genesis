@@ -69,13 +69,27 @@ class TestRunCycle(unittest.TestCase):
     def tearDown(self):
         self._td.cleanup()
 
-    def test_cycle_writes_finding(self):
+    def test_cycle_writes_finding_when_source_resolves(self):
         raw = "FINDING: Firmware V1.4.2 adds LSSC. | SOURCE: https://hypershell.tech/x | WHY: smoother slow walking."
-        with mock.patch.object(sylph, "_research", return_value=raw):
+        with mock.patch.object(sylph, "_research", return_value=raw), \
+             mock.patch.object(sylph, "_fetch", return_value=(200, "<p>V1.4.2 LSSC details</p>")):
             out = sylph.run_cycle(self.cfg)
         self.assertEqual(out["topic"], "Hypershell")
-        self.assertEqual(out["source"], "https://hypershell.tech/x")
+        self.assertTrue(out["verified"]["resolves"])
+        self.assertTrue(out["verified"]["corroborated"])  # V1.4.2 + LSSC appear on the page
         self.assertTrue(out["path"].is_file())
+        self.assertIn("Trust:", out["path"].read_text())
+
+    def test_trust_gate_rejects_dead_source(self):
+        raw = "FINDING: A made-up thing. | SOURCE: https://hallucinated.example/nope | WHY: x."
+        with mock.patch.object(sylph, "_research", return_value=raw), \
+             mock.patch.object(sylph, "_fetch", side_effect=Exception("404")):
+            out = sylph.run_cycle(self.cfg)
+        self.assertIsNone(out)  # source didn't resolve -> finding dropped, not written
+        self.assertEqual(list(self.cfg.findings_dir.glob("*.md")) if self.cfg.findings_dir.exists() else [], [])
+
+    def test_trust_gate_rejects_non_url_source(self):
+        self.assertFalse(sylph.verify_finding("x", "not-a-url")["resolves"])
 
     def test_cycle_honest_no_find(self):
         with mock.patch.object(sylph, "_research", return_value="NONE"):
