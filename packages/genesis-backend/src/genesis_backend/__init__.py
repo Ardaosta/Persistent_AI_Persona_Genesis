@@ -21,6 +21,7 @@ from .seam import (
 from .anthropic_backend import AnthropicBackend
 from .openai_backend import OpenAIBackend
 from .gemini_backend import GeminiBackend
+from .claude_cli_backend import ClaudeCLIBackend
 
 __all__ = [
     "Backend",
@@ -34,5 +35,6 @@ __all__ = [
     "AnthropicBackend",
     "OpenAIBackend",
     "GeminiBackend",
+    "ClaudeCLIBackend",
     "__version__",
 ]

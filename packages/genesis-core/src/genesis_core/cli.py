@@ -77,12 +77,22 @@ def cmd_doctor(args) -> int:
     print(f"  secrets: {cfg.secrets_dir}  (sibling of the vault, never a tool allow-root)")
     print(f"engine: {cfg.provider}  model={cfg.model or '(default)'}")
 
-    key = cfg.load_key()
-    if not key:
-        print("  key: NOT FOUND, add it to the secrets file or the env var")
-        healthy = False
+    # claude-cli authenticates through the `claude` CLI against the subscription, so
+    # there is no key to find: go straight to the live check.
+    if cfg.provider == "claude-cli":
+        print("  auth: Claude subscription via the `claude` CLI (no API key)")
+        do_live_check = True
     else:
-        print(f"  key: present ({len(key)} chars; value never printed)")
+        key = cfg.load_key()
+        if not key:
+            print("  key: NOT FOUND, add it to the secrets file or the env var")
+            healthy = False
+            do_live_check = False
+        else:
+            print(f"  key: present ({len(key)} chars; value never printed)")
+            do_live_check = True
+
+    if do_live_check:
         try:
             be = cfg.build_backend()
             c = be.complete([Message("user", "Reply with the single word: ok")],
