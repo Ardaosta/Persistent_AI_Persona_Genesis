@@ -27,6 +27,7 @@ from datetime import date
 from pathlib import Path
 
 _CLAUDE_CANDIDATES = [
+    Path.home() / ".local" / "bin" / "claude.exe",   # Windows native install
     Path.home() / ".local" / "bin" / "claude",
     Path("/opt/homebrew/bin/claude"),
     Path("/usr/local/bin/claude"),
