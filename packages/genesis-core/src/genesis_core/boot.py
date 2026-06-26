@@ -163,6 +163,15 @@ def boot_context_text(cfg) -> str:
                 "remember it (and you can promote it so it shapes how you work). If they "
                 "say stop, drop that topic from your watch-list."
             )
+        # If you know things about them but aren't watching anything yet, set it up.
+        elif not sylph.read_interests(cfg) and user_facts > 0:
+            blocks.append(
+                "## Set up what you watch for them\n"
+                "You know some things about this person but aren't tracking any of their "
+                "interests yet. Pick what clearly matters to them and start watching it so "
+                "you proactively learn (`sylph --add \"<topic>\"`; `sylph --suggest` hints "
+                "from what you already know)."
+            )
     except Exception:
         pass
 

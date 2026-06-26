@@ -581,6 +581,14 @@ def cmd_sylph(args) -> int:
             return 1
         print(f"promoted to a durable memory ({fid}); it'll shape future sessions.", file=sys.stderr)
         return 0
+    if getattr(args, "suggest", False):
+        cands = sylph.suggest_interests(cfg)
+        if cands:
+            print("candidate interests (from what you already know about them):")
+            print("\n".join(f"- {c}" for c in cands))
+        else:
+            print("(no candidates yet; learn more about them first)")
+        return 0
     if getattr(args, "list", False):
         topics = sylph.read_interests(cfg)
         print("\n".join(f"- {t}" for t in topics) if topics else "(no interests yet; add with --add)")
@@ -682,8 +690,16 @@ def cmd_heartbeat(args) -> int:
         print("heartbeat paused (run `genesis resume` to wake it)", file=sys.stderr)
         return 0
     cmd_dream(_ap.Namespace(force=False))
+    # Outward learning, once/day: prefer Sylph (real web research via claude-on-sub);
+    # fall back to the old model-knowledge `learn` only if the claude CLI is absent.
     if not learned_today(cfg.root):
-        cmd_learn(_ap.Namespace())
+        try:
+            from . import sylph
+            out = sylph.run_cycle(cfg)
+            if out:
+                print(f"[sylph] {out['topic']} -> {out['path']}", file=sys.stderr)
+        except sylph.SylphError:
+            cmd_learn(_ap.Namespace())
         mark_learned(cfg.root)
     # Perishable working-state: overwritten freely every wake, never durable.
     from datetime import datetime as _dt
@@ -948,6 +964,7 @@ def main(argv=None) -> int:
     sy_p.add_argument("--remove", default=None, help="stop tracking a topic")
     sy_p.add_argument("--promote", default=None, help="promote a finding (path or slug) into durable behavior-shaping memory")
     sy_p.add_argument("--list", action="store_true", help="list your interests")
+    sy_p.add_argument("--suggest", action="store_true", help="suggest candidate interests from what you already know")
     sy_p.set_defaults(func=cmd_sylph)
     cap_p = sub.add_parser("capture", help="queue a soul-capture candidate (the dream adjudicates it)")
     cap_p.add_argument("text", help="the thing that struck you, in your own words")
