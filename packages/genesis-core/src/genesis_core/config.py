@@ -150,7 +150,9 @@ def load(root: Path | None = None) -> GenesisConfig:
     data: dict = {}
     cfgp = root / "config.json"
     if cfgp.is_file():
-        data = json.loads(cfgp.read_text(encoding="utf-8"))
+        # utf-8-sig tolerates a leading BOM: Windows editors and PowerShell's
+        # `Set-Content -Encoding utf8` prepend one, and plain utf-8 chokes on it.
+        data = json.loads(cfgp.read_text(encoding="utf-8-sig"))
     recipients = data.get("allowed_email_recipients") or None  # None → default
     trains = data.get("engine_trains")  # None unless explicitly set
     machinery = data.get("machinery") if isinstance(data.get("machinery"), dict) else None
