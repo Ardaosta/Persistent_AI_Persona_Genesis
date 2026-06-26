@@ -249,6 +249,29 @@ def remove_interest(cfg, topic: str) -> bool:
     return True
 
 
+# --- Phase 5: propose new interests from what the agent already knows ---
+
+def suggest_interests(cfg, limit: int = 8) -> list[str]:
+    """Candidate watch-topics derived from the vault, distinctive proper-noun-ish
+    terms in the person's project/user/reference facts, minus what's already
+    tracked. Hints the agent reviews and proposes ('you care about X, track it?')."""
+    from genesis_memory import Vault
+    if not cfg.vault_dir.exists():
+        return []
+    tracked = {t.lower() for t in read_interests(cfg)}
+    counts: dict[str, int] = {}
+    for f in Vault(cfg.vault_dir).iter_facts():
+        if f.kind not in ("project", "user", "reference"):
+            continue
+        for tok in _distinctive_tokens(f.description + " " + (f.body or "")):
+            k = tok.strip()
+            if len(k) >= 4:
+                counts[k] = counts.get(k, 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    out = [k for k, _ in ranked if k.lower() not in tracked and not any(k.lower() in t for t in tracked)]
+    return out[:limit]
+
+
 # --- Phase 4: close the loop to behavior ---
 
 def promote_finding(cfg, finding_path) -> str:

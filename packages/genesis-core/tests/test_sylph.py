@@ -149,5 +149,45 @@ class TestSurfacingAndPromote(unittest.TestCase):
         self.assertIn("new thing", fact.description)
 
 
+class TestSuggestAndHeartbeat(unittest.TestCase):
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.cfg = cfgmod.GenesisConfig(root=Path(self._td.name))
+        self.cfg.vault_dir.mkdir(parents=True)
+
+    def tearDown(self):
+        self._td.cleanup()
+
+    def test_suggest_from_facts_minus_tracked(self):
+        from genesis_memory import Fact, Vault
+        v = Vault(self.cfg.vault_dir)
+        v.write(Fact(id="p1", kind="project", description="Building HyperShell voice control software"))
+        v.write(Fact(id="p2", kind="user", description="Enjoys Foundation novels and orbital mechanics"))
+        sylph.add_interest(self.cfg, "HyperShell")  # already tracked -> excluded
+        cands = sylph.suggest_interests(self.cfg)
+        self.assertNotIn("HyperShell", cands)
+        self.assertTrue(any("Foundation" in c for c in cands))
+
+    def test_boot_nudges_to_set_up_watchlist(self):
+        from genesis_core.boot import boot_context_text
+        from genesis_memory import Fact, Vault
+        Vault(self.cfg.vault_dir).write(Fact(id="u1", kind="user", description="likes X"))
+        text = boot_context_text(self.cfg)  # has a user fact, no interests, no findings
+        self.assertIn("Set up what you watch", text)
+
+    def test_heartbeat_prefers_sylph(self):
+        from genesis_core import cli
+        from genesis_core import config as cfgmod2
+        import argparse
+        real_load = cfgmod2.load
+        with mock.patch.object(cfgmod2, "load", lambda *a, **k: real_load(self.cfg.root)), \
+             mock.patch.object(cli, "cmd_dream"), \
+             mock.patch.object(sylph, "run_cycle", return_value={"topic": "X", "path": Path("/x")}) as rc, \
+             mock.patch.object(cli, "cmd_learn") as learn:
+            cli.cmd_heartbeat(argparse.Namespace())
+        rc.assert_called_once()        # Sylph is preferred
+        learn.assert_not_called()      # the hollow learn is not used when Sylph works
+
+
 if __name__ == "__main__":
     unittest.main()
