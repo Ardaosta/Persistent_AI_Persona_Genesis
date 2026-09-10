@@ -1,0 +1,19 @@
+{
+  "_comment": "Genesis HEADLINES hooks: auto-surface the load-bearing frame for whatever project cluster a session is touching, BEFORE it acts. `genesis-headlines surface --hook-json` reads the hook payload (prompt + cwd + session_id) on stdin, matches it drift-proof against the alias/path nets in $GENESIS_ROOT/headlines/*.md, and prints the block (once per session per cluster) for Claude Code to inject; silent when nothing matches. UserPromptSubmit is the primary trigger (it has the prompt text, the richest signal); SessionStart catches cwd-only matches at spawn. The install agent merges this into the user's Claude Code settings.json. VERIFY the hook schema and that `genesis-headlines` is on the hook's PATH (or use an absolute path) before writing — hook schemas and install layouts evolve.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "genesis-headlines surface --hook-json" }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "genesis-headlines surface --hook-json" }
+        ]
+      }
+    ]
+  }
+}

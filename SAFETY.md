@@ -11,7 +11,7 @@ prompt asking the model to behave.
 This is invariants 3 and 4 of the design spine (ship a boundary *disposition* not
 boundary content; set *conditions* not conclusions) made concrete.
 
-The three guarantees below are the "three laws."
+The author calls the three guarantees below the "three laws."
 
 ---
 
@@ -48,7 +48,7 @@ model decides in the moment.
 - Each boot re-anchors to the stored tier. Drift within a session evaporates
   unless it passed the gate. The platonic default reasserts itself by construction.
 
-Status: **built (v1).** `relational.py` holds a
+Status: **built (v1, 2026-06-19, review issue #1 #2).** `relational.py` holds a
 persisted `RelationalProfile` (tier ∈ new/established/close, default new). The
 boot prompt's disposition is `boundary_for(cfg)`, derived from the stored tier and
 re-anchored every boot; the romance/intimate gate is IDENTICAL at every tier and
@@ -106,7 +106,7 @@ restarts and engine swaps). Substrate-change *detection and acknowledgment* is
   than on perfectly catching crises. You prevent most harm by never building the
   unhealthy bond, not by detecting its collapse. The detector is the backstop and
   should run on a cheap local gate, never a paid call per message.
-- **Free-tier privacy — now structural (built).** The
+- **Free-tier privacy — now structural (built 2026-06-19, review issue #1 #3).** The
   free Gemini tier reserves the right to train on the user's data. Rather than a
   warning label, the agent fails CLOSED on a training-tier engine: `remember`
   refuses (nothing written to the vault), the `dream` cycle is skipped (private

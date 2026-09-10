@@ -20,6 +20,7 @@ from .seam import (
 )
 from .anthropic_backend import AnthropicBackend
 from .openai_backend import OpenAIBackend
+from .responses_backend import ResponsesBackend
 from .gemini_backend import GeminiBackend
 from .claude_cli_backend import ClaudeCLIBackend
 
@@ -34,6 +35,7 @@ __all__ = [
     "TurnResult",
     "AnthropicBackend",
     "OpenAIBackend",
+    "ResponsesBackend",
     "GeminiBackend",
     "ClaudeCLIBackend",
     "__version__",

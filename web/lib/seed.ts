@@ -6,6 +6,8 @@
 // Pull-not-push: the seed travels INSIDE the install command the user runs. The
 // web never executes anything on their box and never phones home for the seed.
 
+export type Harness = "claude-code" | "codex";
+
 export type Seed = {
   v: number;
   archetype: Record<string, unknown>;
@@ -14,6 +16,14 @@ export type Seed = {
   provider: string | null;
   sponsor: string | null;
   mode: string | null;
+  // 2026-09-10 conditions (mirrored in seed.py): the person's chosen name for
+  // the AI or null to let it choose its own; which Mode-B doors to wire (mode
+  // stays the primary); a repository the AI is joining; the getting-to-know-you
+  // drip opt-in. Conditions, never content.
+  name: string | null;
+  harnesses: Harness[];
+  project_repo: string | null;
+  drip: boolean;
 };
 
 export const SEED_VERSION = 1;
@@ -25,6 +35,10 @@ export function makeSeed(opts: {
   provider?: string | null;
   sponsor?: string | null;
   mode?: string | null;
+  name?: string | null;
+  harnesses?: Harness[];
+  project_repo?: string | null;
+  drip?: boolean;
 }): Seed {
   return {
     v: SEED_VERSION,
@@ -34,6 +48,10 @@ export function makeSeed(opts: {
     provider: opts.provider ?? null,
     sponsor: opts.sponsor ?? null,
     mode: opts.mode ?? null,
+    name: (opts.name ?? "").trim().slice(0, 60) || null,
+    harnesses: opts.harnesses ?? [],
+    project_repo: (opts.project_repo ?? "").trim().slice(0, 300) || null,
+    drip: opts.drip ?? false,
   };
 }
 

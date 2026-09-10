@@ -26,16 +26,42 @@ export const ONBOARDING: Beat[] = [
   {
     kind: "say",
     lines: [
-      "Hi. This short setup shapes the AI we build for you.",
+      "Hi. Let's get started.",
+      "You're about to set up an AI that lives on your own computer, remembers you, and gets better over time. Nobody else holds its memory. Not us, not the company whose model it thinks with.",
+      "It arrives without a personality. Who it becomes grows out of working with you. This short setup only shapes the machinery around it.",
       "A few quick questions, and it keeps adapting later, so nothing here is locked in.",
     ],
   },
   { kind: "interview" },
   {
     kind: "say",
+    lines: ["Now, one question about it rather than about you."],
+  },
+  {
+    // The name is the ONE identity field setup may carry, and only because the
+    // person chooses it. The default is to let the AI name itself in your first
+    // conversation, which keeps the un-authored invariant intact.
+    kind: "ask",
+    record: "name",
+    prompt: "Should it have a name from day one?",
+    choices: [
+      {
+        label: "Let it choose its own",
+        sublabel: "It picks a name in your first conversation. Recommended.",
+        value: "",
+      },
+    ],
+    freeText: {
+      label: "I have a name in mind",
+      sublabel: "It'll answer to this from the first session.",
+      placeholder: "e.g. Quill",
+    },
+  },
+  {
+    kind: "say",
     // The card below themes the SCREEN's look only. We do NOT pre-seed how the AI
     // speaks — its voice is un-authored and grows through the relationship (the
-    // spine's invariants 1 & 2; flagged in dogfooding). So this asks about the
+    // spine's invariants 1 & 2; flagged in review, issue #1). So this asks about the
     // interface's feel, and the recorded value is a visual theme, not a register.
     lines: ["Good. And the feel of it on screen, while we're here."],
   },
@@ -85,16 +111,64 @@ export const ONBOARDING: Beat[] = [
     prompt: "Pick a brain.",
     choices: [
       {
-        label: "Free to start",
-        sublabel: "Uses Google's Gemini. Free, no account beyond a quick key. Great for trying it.",
-        value: "gemini",
-      },
-      {
         label: "My Claude subscription",
         sublabel: "Most capable, and it can read and write code. Needs the Claude app and a paid plan.",
         value: "claude",
       },
+      {
+        label: "My ChatGPT subscription (Codex)",
+        sublabel: "Runs on OpenAI's Codex. Needs the Codex app or CLI and a ChatGPT plan.",
+        value: "codex",
+      },
+      {
+        label: "Both: Claude first, Codex too",
+        sublabel: "One AI, one memory, two doors. Open it in whichever app you like.",
+        value: "both",
+      },
+      {
+        label: "Free to start",
+        sublabel: "Uses Google's Gemini. Free, no account beyond a quick key. Great for trying it.",
+        value: "gemini",
+      },
     ],
+  },
+  {
+    kind: "say",
+    lines: ["Two more, and both are optional."],
+  },
+  {
+    kind: "ask",
+    record: "drip",
+    prompt: "Want it to get to know you over time? It would ask one or two real questions a session, at natural moments, and remember your answers.",
+    choices: [
+      {
+        label: "Yes, get to know me",
+        sublabel: "Working style first, then people, taste, and edges. Never a quiz.",
+        value: "yes",
+      },
+      {
+        label: "Not for now",
+        sublabel: "It'll still remember what you tell it. You can switch this on later.",
+        value: "",
+      },
+    ],
+  },
+  {
+    kind: "ask",
+    record: "project_repo",
+    prompt: "Is there a project it's joining? If a collaborator gave you a repository link, paste it and your AI will start with that project's knowledge.",
+    choices: [
+      {
+        label: "No project yet",
+        sublabel: "Skip this.",
+        value: "",
+      },
+    ],
+    freeText: {
+      label: "Paste a repository link",
+      sublabel: "A GitHub address, or a folder on your machine.",
+      placeholder: "https://github.com/org/repo",
+    },
   },
   {
     kind: "say",

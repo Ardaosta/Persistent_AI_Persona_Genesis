@@ -1,7 +1,7 @@
 # Connect a brain — the foolproof key flow (clocked 2026-06-19)
 
 This is the exact, verified process for getting a **free Gemini brain** connected,
-walked end-to-end on a real Google account. It is the spec for the
+walked end-to-end on a real Google account (the reference companion's). It is the spec for the
 guided connect-a-brain step: whatever a human must do here, the guide explains in
 plain language; whatever can be automated/validated, the guide does.
 
@@ -61,7 +61,7 @@ our-key path — still an open decision; see DESIGN/BETA.)
   gemini-3-flash-preview, gemini-3.1-flash-lite, and more (50 models visible).
   `gemini-2.5-flash` and `gemini-flash-latest` are good safe defaults.
 
-## The guide's voice (use this framing at the consent moment)
+## The guide's voice (2026-06-19) — use this framing at the consent moment
 
 > "Let's get a brain connected for me. We can change it later, but this will let
 > me set things up, and it won't cost you anything. I'll open a window for you in

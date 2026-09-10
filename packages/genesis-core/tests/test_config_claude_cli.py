@@ -30,3 +30,11 @@ def test_model_passes_through(tmp_path):
     cfg = _cfg(tmp_path, model="claude-opus-4-8")
     be = cfg.build_backend()
     assert be.caps().default_model == "claude-opus-4-8"
+
+
+def test_config_load_tolerates_utf8_bom(tmp_path):
+    # PowerShell's `Set-Content -Encoding utf8` writes a BOM; the loader must cope.
+    (tmp_path / "config.json").write_text(
+        '{"provider": "claude-cli"}', encoding="utf-8-sig")
+    cfg = cfgmod.load(tmp_path)
+    assert cfg.provider == "claude-cli"

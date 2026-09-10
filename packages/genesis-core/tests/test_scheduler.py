@@ -95,8 +95,17 @@ class TestWindowsSchedulerCommands(unittest.TestCase):
 
     def test_install_invokes_schtasks_create(self):
         s = sch.WindowsScheduler(self.root, python=r"C:\py\python.exe")
-        wrapper = self.root / "heartbeat.cmd"
-        wrapper.write_text("@echo off\n")
+        # Generate the REAL artifacts rather than fabricating a lone .cmd. The
+        # hand-written wrapper had no .vbs beside it, which is a configuration
+        # that pops a console window on every wake and could never have worked;
+        # the visibility invariant refused it, correctly, the moment it existed.
+        import platform as _pl
+        real = _pl.system
+        _pl.system = lambda: "Windows"
+        try:
+            wrapper = sch.generate_wrapper(self.root, "/x", r"C:\py\python.exe")
+        finally:
+            _pl.system = real
         with mock.patch.object(sch.subprocess, "run") as run:
             run.return_value = mock.Mock(returncode=0, stdout="SUCCESS", stderr="")
             ok, detail = s._install_os_job(wrapper)
@@ -107,6 +116,22 @@ class TestWindowsSchedulerCommands(unittest.TestCase):
         self.assertIn(sch.WINDOWS_TASK_NAME, argv)
         self.assertIn("/SC", argv)
         self.assertIn("HOURLY", argv)
+        # And the action is the hidden launcher, not the console-popping .cmd.
+        action = argv[argv.index("/TR") + 1]
+        self.assertIn("wscript", action.lower())
+        self.assertIn(".vbs", action.lower())
+
+    def test_install_refuses_a_console_popping_configuration(self):
+        """If the hidden launcher is missing, do not register the job. A loop that
+        draws a window on someone every hour is worse than one that is not
+        scheduled and says why."""
+        s = sch.WindowsScheduler(self.root, python=r"C:\py\python.exe")
+        wrapper = self.root / "heartbeat.cmd"
+        wrapper.write_text("@echo off\n")  # no .vbs beside it
+        with mock.patch.object(sch.subprocess, "run") as run:
+            with self.assertRaises(sch.VisibleLoopError):
+                s._install_os_job(wrapper)
+            run.assert_not_called()
 
 
 class TestHeartbeatHonorsPause(unittest.TestCase):

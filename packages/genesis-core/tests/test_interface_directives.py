@@ -161,9 +161,9 @@ class TestTools(unittest.TestCase):
 
     def test_emphasize_tool(self):
         p = InterfaceProfile()
-        msg, d = tool_emphasize(p, "Hello there")
+        msg, d = tool_emphasize(p, "Hello Dana")
         self.assertIn("applied", msg)
-        self.assertEqual(d["text"], "Hello there")
+        self.assertEqual(d["text"], "Hello Dana")
 
 
 class TestToolSpecs(unittest.TestCase):

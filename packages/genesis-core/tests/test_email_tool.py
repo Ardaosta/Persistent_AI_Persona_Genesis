@@ -18,7 +18,7 @@ from genesis_core.email_tool import (
 )
 
 
-ALLOWED = ["help@example.com"]
+ALLOWED = ["sponsor@example.com"]
 
 
 class TestDailyLedger(unittest.TestCase):
@@ -39,10 +39,10 @@ class TestDraftQueue(unittest.TestCase):
         self.root = Path(tempfile.mkdtemp())
 
     def test_save_and_load(self):
-        did = save_draft(self.root, "help@example.com", "Hi", "Hello there")
+        did = save_draft(self.root, "sponsor@example.com", "Hi", "Hello there")
         draft = load_draft(self.root, did)
         self.assertIsNotNone(draft)
-        self.assertEqual(draft["to"], "help@example.com")
+        self.assertEqual(draft["to"], "sponsor@example.com")
         self.assertEqual(draft["subject"], "Hi")
         self.assertEqual(draft["body"], "Hello there")
 
@@ -56,7 +56,7 @@ class TestToolEmailDraft(unittest.TestCase):
 
     def test_allowed_recipient_drafts_ok(self):
         result = tool_email_draft(
-            "help@example.com", "Test", "Body text", ALLOWED, self.root
+            "sponsor@example.com", "Test", "Body text", ALLOWED, self.root
         )
         self.assertIn("Draft saved", result)
         self.assertIn("id:", result)
@@ -71,13 +71,13 @@ class TestToolEmailDraft(unittest.TestCase):
 
     def test_empty_subject_rejected(self):
         result = tool_email_draft(
-            "help@example.com", "", "Body", ALLOWED, self.root
+            "sponsor@example.com", "", "Body", ALLOWED, self.root
         )
         self.assertIn("error", result)
 
     def test_empty_body_rejected(self):
         result = tool_email_draft(
-            "help@example.com", "Subj", "", ALLOWED, self.root
+            "sponsor@example.com", "Subj", "", ALLOWED, self.root
         )
         self.assertIn("error", result)
 
@@ -86,17 +86,17 @@ class TestToolEmailDraft(unittest.TestCase):
         for _ in range(DAILY_CAP):
             _increment_sent(self.root)
         result = tool_email_draft(
-            "help@example.com", "Over cap", "Body", ALLOWED, self.root
+            "sponsor@example.com", "Over cap", "Body", ALLOWED, self.root
         )
         self.assertIn("denied", result)
         self.assertIn("cap", result)
 
     def test_draft_preview_shows_recipient_and_subject(self):
         result = tool_email_draft(
-            "help@example.com", "Hello there", "Body", ALLOWED, self.root
+            "sponsor@example.com", "Hello Sponsor", "Body", ALLOWED, self.root
         )
-        self.assertIn("help@example.com", result)
-        self.assertIn("Hello there", result)
+        self.assertIn("sponsor@example.com", result)
+        self.assertIn("Hello Sponsor", result)
 
 
 class TestToolEmailConfirm(unittest.TestCase):
@@ -112,7 +112,7 @@ class TestToolEmailConfirm(unittest.TestCase):
 
     def test_no_smtp_config_returns_helpful_message(self):
         # Save a draft but provide no smtp config
-        did = save_draft(self.root, "help@example.com", "Sub", "Body")
+        did = save_draft(self.root, "sponsor@example.com", "Sub", "Body")
         # Patch load_draft to return a draft
         from genesis_core import email_tool as et
         orig = et.load_draft

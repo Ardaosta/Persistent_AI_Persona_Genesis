@@ -90,6 +90,13 @@ export const QUESTION_POOL: Question[] = [
 ];
 
 const MAX_QUESTIONS = 6;
+
+// The floor, mirroring interview.py. shouldStop used to be satisfied the moment
+// nextQuestion returned null, which on a starved or fully-rejected pool is true
+// on the FIRST call: zero questions asked, a complete-looking all-zeros profile
+// out the other end, and nothing anywhere saying it was built on nothing. An
+// escape hatch that permits zero without a floor becomes zero-always.
+const MIN_QUESTIONS = 3;
 const SETTLE = 0.6;
 
 export type UserModel = { scores: Record<Axis, number>; evidence: Record<Axis, number>; asked: string[] };
@@ -117,9 +124,26 @@ export function nextQuestion(m: UserModel, pool: Question[] = QUESTION_POOL): Qu
   return candidates.reduce((best, q) => (uncertainty(m, q.axis) > uncertainty(m, best.axis) ? q : best));
 }
 
+function poolCanServe(m: UserModel): boolean {
+  // nextQuestion skips settled axes, so under the floor it can return null while
+  // perfectly good questions remain. This widening is what makes the floor real.
+  return QUESTION_POOL.some((q) => !m.asked.includes(q.id) && validateQuestion(q));
+}
+
+/** The question to ask while still below MIN_QUESTIONS: the ordinary pick, else
+ *  any valid unasked one, so the floor is a number the loop can actually reach. */
+export function nextUnderFloor(m: UserModel): Question | null {
+  const q = nextQuestion(m);
+  if (q) return q;
+  if (m.asked.length >= MIN_QUESTIONS) return null;
+  return QUESTION_POOL.find((c) => !m.asked.includes(c.id) && validateQuestion(c)) ?? null;
+}
+
 export function shouldStop(m: UserModel): boolean {
+  if (m.asked.length >= MAX_QUESTIONS) return true;
+  if (m.asked.length < MIN_QUESTIONS) return nextQuestion(m) === null && !poolCanServe(m);
   const confident = AXES.every((a) => settled(m, a));
-  return confident || m.asked.length >= MAX_QUESTIONS || nextQuestion(m) === null;
+  return confident || nextQuestion(m) === null;
 }
 
 const clamp = (x: number) => Math.max(-1, Math.min(1, x));

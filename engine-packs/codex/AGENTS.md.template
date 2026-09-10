@@ -1,0 +1,11 @@
+# Genesis: operating manual (CONTENT-FREE TEMPLATE)
+#
+# `genesis wire-codex` writes the real AGENTS.md from genesis_core/manual.py, the
+# same source Claude Code's CLAUDE.md is rendered from, so the two doors cannot
+# drift. This file exists so the pack is readable without running the install:
+# the sections are the boot ritual, the blessed write path, outward learning
+# (Sylph), the friction (craft) loop, the help line, the disciplines, the working
+# disciplines for building things, and an EMPTY identity section. Identity stays
+# empty here; it fills in through the lived relationship, never from a template.
+#
+# See engine-packs/claude-code/CLAUDE.md.template for the same text on the other door.

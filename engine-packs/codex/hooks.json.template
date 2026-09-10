@@ -1,0 +1,14 @@
+{
+  "_comment": "Genesis hooks for Codex, written to <home>/.codex/hooks.json by `genesis wire-codex`. Same shape as Claude Code's hooks. SessionStart: harness-enforced boot ritual (stdout becomes developer context; additionalContextLimit raised because the default ~2,500 tokens truncates a mature vault's index). UserPromptSubmit: register re-anchor every 10 prompts. Stop: the craft gate, exit 2 + stderr once per session when no friction entry was recorded. Project hooks load only for a TRUSTED project; the trust entry lives in ~/.codex/config.toml. VERIFY against the installed Codex version before writing by hand.",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "GENESIS_ROOT=\"${GENESIS_ROOT}\" \"${GENESIS_EXE}\" boot-context --hook", "additionalContextLimit": 12000 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "GENESIS_ROOT=\"${GENESIS_ROOT}\" \"${GENESIS_EXE}\" reanchor --hook" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "GENESIS_ROOT=\"${GENESIS_ROOT}\" \"${GENESIS_EXE}\" craft-gate --hook" } ] }
+    ]
+  }
+}

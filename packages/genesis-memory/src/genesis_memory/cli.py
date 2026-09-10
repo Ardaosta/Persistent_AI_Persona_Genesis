@@ -1,8 +1,9 @@
-"""`genesis` — the AI's plain-language control surface (Phase 1: status).
+"""`genesis` — the AI's plain-language control surface (Phase 1: status, lint).
 
 Monitoring should not mean "go read logs." `genesis status` reports memory health
-in one glance. More verbs (autonomy, pause/resume, rollback, grant, resync) land
-with the loops and broker.
+in one glance; `genesis lint` reports link-graph health (the auto-heal signal).
+More verbs (autonomy, pause/resume, rollback, grant, resync) land with the loops
+and broker.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import os
 from pathlib import Path
 
 from . import __version__, index as index_mod
+from .graph import Graph
 from .vault import Vault
 
 
@@ -48,6 +50,17 @@ def cmd_status(args) -> int:
     return 0
 
 
+def cmd_lint(args) -> int:
+    root = _vault_root(args.vault)
+    print(f"vault: {root}")
+    if not root.exists():
+        print("lint: no vault yet — nothing to check")
+        return 0
+    g = Graph.from_vault(Vault(root))
+    print(g.render_lint())
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="genesis", description="Genesis AI control surface")
     p.add_argument("--version", action="version", version=f"genesis-memory {__version__}")
@@ -55,6 +68,9 @@ def main(argv=None) -> int:
     ps = sub.add_parser("status", help="show the AI's memory health")
     ps.add_argument("--vault", default=None, help="vault root (default: $GENESIS_ROOT or ~/.genesis/vault)")
     ps.set_defaults(func=cmd_status)
+    pl = sub.add_parser("lint", help="show link-graph health (write-me + name-drift)")
+    pl.add_argument("--vault", default=None, help="vault root (default: $GENESIS_ROOT or ~/.genesis/vault)")
+    pl.set_defaults(func=cmd_lint)
 
     args = p.parse_args(argv)
     if not getattr(args, "func", None):

@@ -11,7 +11,8 @@ __version__ = "0.0.1"
 from .fact import Fact, FactError, KINDS, STATUSES
 from .vault import Vault
 from .tiers import Continuity, Perishable
-from . import frontmatter, index, tiers
+from .graph import Graph
+from . import frontmatter, index, tiers, graph, filerefs, selflint, reachability
 
 __all__ = [
     "Fact",
@@ -21,8 +22,13 @@ __all__ = [
     "Vault",
     "Continuity",
     "Perishable",
+    "Graph",
     "frontmatter",
     "index",
     "tiers",
+    "graph",
+    "filerefs",
+    "selflint",
+    "reachability",
     "__version__",
 ]

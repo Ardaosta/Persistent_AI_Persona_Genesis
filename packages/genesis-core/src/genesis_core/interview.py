@@ -135,6 +135,19 @@ QUESTION_POOL: list[dict] = [
 ]
 
 MAX_QUESTIONS = 6
+
+# The FLOOR, and the reason it exists: `should_stop` used to be satisfied the
+# moment `next_question` came back None, which on a starved or fully-rejected
+# pool is TRUE ON THE FIRST CALL. The interview then asked nothing, `finalize`
+# returned a complete-looking profile of all-zeros, and `genesis status` reported
+# "tuned by onboarding". Tuned by nothing, and no surface said so.
+#
+# This is the shape the field keeps teaching: an escape hatch that permits zero
+# without a floor becomes zero-always. The same week, a drip loop authorized to
+# "ask zero questions if nothing fits" asked zero questions forever. Permission
+# to skip is not the bug; permission to skip with no floor and no record is.
+MIN_QUESTIONS = 3
+
 _SETTLE = 0.6  # |score| at/above which an axis is settled (a decisive answer hits it)
 
 
@@ -173,7 +186,50 @@ def next_question(model: UserModel, pool: list[dict] = QUESTION_POOL) -> dict | 
 
 
 def should_stop(model: UserModel) -> bool:
-    return model.confident() or len(model.asked) >= MAX_QUESTIONS or next_question(model) is None
+    """Stop only above the floor, and never on zero.
+
+    The ceiling still wins outright: MAX_QUESTIONS caps the interview no matter
+    what. Below MIN_QUESTIONS, though, neither early confidence nor an exhausted
+    pool ends it, because confidence bought with two answers is exactly the kind
+    this floor exists to distrust, and a pool that cannot produce a third question
+    is a fault to surface rather than a result to accept.
+    """
+    if len(model.asked) >= MAX_QUESTIONS:
+        return True
+    if len(model.asked) < MIN_QUESTIONS:
+        return next_question(model) is None and not _pool_can_serve(model)
+    return model.confident() or next_question(model) is None
+
+
+def _pool_can_serve(model: UserModel) -> bool:
+    """Is there ANY unasked, valid question left, settled axes included?
+
+    `next_question` deliberately skips settled axes, so under the floor it can
+    return None while perfectly good questions remain. This is the widening the
+    floor needs to mean anything.
+    """
+    return any(
+        q["id"] not in model.asked and validate_question(q)
+        for q in QUESTION_POOL
+    )
+
+
+def next_under_floor(model: UserModel):
+    """The question to ask while still below MIN_QUESTIONS.
+
+    Prefers the ordinary unsettled-axis pick; falls back to any valid unasked
+    question when every axis has settled early. Callers driving the loop should
+    use this so the floor is actually reachable.
+    """
+    q = next_question(model)
+    if q is not None:
+        return q
+    if len(model.asked) >= MIN_QUESTIONS:
+        return None
+    for cand in QUESTION_POOL:
+        if cand["id"] not in model.asked and validate_question(cand):
+            return cand
+    return None
 
 
 def _clamp(x: float) -> float:
@@ -222,7 +278,17 @@ def finalize(model: UserModel) -> dict:
         "surface": "voice" if vt <= -0.3 else "text" if vt >= 0.3 else "either",
         "scope": _band(pos["narrow_broad"], "narrow", "broad"),
     }
-    return {"archetype": archetype, "machinery": machinery}
+    # How much this profile actually rests on. Carried out of finalize() so no
+    # caller can mistake an interview that asked nothing for one that asked six:
+    # before this, the two returned the same shape and were indistinguishable.
+    asked = len(model.asked)
+    evidence = {
+        "questions_asked": asked,
+        "floor": MIN_QUESTIONS,
+        "tuned": asked >= MIN_QUESTIONS,
+        "starved": asked < MIN_QUESTIONS,
+    }
+    return {"archetype": archetype, "machinery": machinery, "evidence": evidence}
 
 
 def run_scripted(answers: list[tuple[str, float]]) -> dict:

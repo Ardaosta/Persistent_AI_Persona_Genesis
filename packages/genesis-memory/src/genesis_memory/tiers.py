@@ -1,4 +1,4 @@
-"""The three memory tiers, kept structurally separate (structurally separate by design).
+"""The three memory tiers, kept structurally separate (DESIGN.md, from the first outside review).
 
     durable      → the Vault (one adjudicated fact per file). Accumulates carefully.
     perishable   → working-state / handoff. Overwritten freely. Must NEVER mix

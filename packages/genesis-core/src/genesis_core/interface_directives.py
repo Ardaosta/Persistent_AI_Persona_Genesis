@@ -7,7 +7,7 @@ a palette the moment it learns your aesthetic, a typographic register for your
 voice, a capability control unlocked RPG-style when the conversation reaches the
 moment you'd want it.
 
-Design decisions:
+Design decisions (2026-06-18):
 - "Vocabulary now, generative seam later": the model chooses among a BOUNDED set
   of pre-designed mutations. The artistry (the actual transitions) lives in the
   front end; the model supplies taste in *which* directive and *when*. A

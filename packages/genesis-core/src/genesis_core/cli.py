@@ -13,11 +13,15 @@ from . import config as cfgmod
 
 
 def cmd_status(args) -> int:
-    from .dream import get_last_dream, today_key
     from .relational import RelationalProfile
     cfg = cfgmod.load()
     print(f"home: {cfg.root}")
+    print(f"name: {cfg.name}" if cfg.name else "name: none yet (it may choose its own)")
     print(f"engine: {cfg.provider} ({cfg.model or 'default model'})")
+    if cfg.harnesses:
+        print(f"doors: {', '.join(cfg.harnesses)} (Mode B; one memory behind every door)")
+    if cfg.project_repo:
+        print(f"project: {cfg.project_repo}")
     print(f"  privacy: {'TRAINING tier, memory paused, no deepening' if cfg.engine_trains else 'private'}")
     rp = RelationalProfile.load(cfg.vault_dir / "relational_profile.json")
     since = f" (since {rp.since})" if rp.since else ""
@@ -43,17 +47,28 @@ def cmd_status(args) -> int:
     per = Perishable(cfg.root)
     slots = per.slots()
     print(f"perishable: {', '.join(slots) if slots else 'empty'} (working-state, never durable)")
+    from . import friction as _fr
+    fs = _fr.stats(cfg.root)
+    print(f"friction loop: {fs['entries']} entries, {fs['explicit_none']} explicit none, "
+          f"{fs['routed']} routed, {fs['won']} won")
+    jw = _fr.journaling_warning(cfg.root)
+    if jw:
+        print(f"  WARNING: {jw}")
 
-    last = get_last_dream(cfg.root)
-    if last is None:
+    # The dream line used to read the daykey, which the dream writes about
+    # itself. It would say "last dream: today" for a run that produced nothing
+    # and for one whose journal write failed. Report the journal, the artifact
+    # the work actually left behind, and surface the daykey only where the two
+    # disagree, because that gap is the finding.
+    from . import mechanism_health as mh
+    d = mh._dream_entry(cfg)
+    if d["status"] == "failed":
+        print(f"last dream: {d['last_fired'] or 'never'}  [PROBLEM: it claims "
+              f"{d.get('self_reported')}, run `genesis health`]")
+    elif d["last_fired"] is None:
         print("last dream: never")
-    elif last[0] == today_key():
-        print(f"last dream: today at {last[1][11:16]}")
     else:
-        from datetime import date
-        days_ago = (date.today() - date.fromisoformat(last[0])).days
-        label = "yesterday" if days_ago == 1 else f"{days_ago} days ago"
-        print(f"last dream: {label} ({last[0]})")
+        print(f"last dream: {d['last_fired']}")
     return 0
 
 
@@ -72,7 +87,24 @@ def cmd_doctor(args) -> int:
 
     cfg = cfgmod.load()
     healthy = True
+    import os as _os
+    pinned = _os.environ.get("GENESIS_ROOT")
     print(f"home: {cfg.root}")
+    print("  this is the folder your AI's memory lives in.")
+    if pinned:
+        print("  found by: the GENESIS_ROOT setting, so every command agrees on it")
+    else:
+        print("  found by: the default location (GENESIS_ROOT is not set)")
+        print("            run `genesis init` here to pin it, or set GENESIS_ROOT yourself")
+    others = cfgmod.find_homes(exclude=cfg.root)
+    if others:
+        healthy = False
+        print("  WARNING: this machine has more than one AI home. Memory saved in one")
+        print("           is invisible from the other, which reads as amnesia.")
+        for o in others:
+            print(f"           also a home: {o}")
+        print("           If the one above is not the one you talk to, stop and pin the right")
+        print("           one with GENESIS_ROOT before saving anything else.")
     print(f"  vault:   {cfg.vault_dir}  [{'exists' if cfg.vault_dir.exists() else 'not created yet'}]")
     print(f"  secrets: {cfg.secrets_dir}  (sibling of the vault, never a tool allow-root)")
     print(f"engine: {cfg.provider}  model={cfg.model or '(default)'}")
@@ -105,6 +137,21 @@ def cmd_doctor(args) -> int:
         except BackendError as e:
             print(f"  live check: FAILED, {e}")
             healthy = False
+
+    # Delivery, not capture: the graph hygiene pass already writes a dated report
+    # into root/hygiene/ that nobody opens. One line here is what gets read.
+    if cfg.vault_dir.is_dir():
+        try:
+            from genesis_memory import filerefs
+            refs = filerefs.lint(cfg.vault_dir)
+            nbad = len(refs["missing"]) + len(refs["drift"])
+            if nbad:
+                healthy = False
+                print(f"  references: {nbad} broken. Run `genesis verify` for the list.")
+            else:
+                print(f"  references: all {refs['checked']} file paths in the vault resolve")
+        except Exception as e:
+            print(f"  references: could not check ({e})")
 
     print("doctor:", "healthy" if healthy else "PROBLEMS FOUND")
     return 0 if healthy else 1
@@ -208,7 +255,7 @@ def cmd_install(args) -> int:
     from .agent import Session
     from genesis_backend.seam import BackendError
 
-    cfg = cfgmod.load()
+    cfg = cfgmod.load(creating=True)  # setup may stand up a home
 
     # If no key is present at all, walk the user through getting one, no jargon
     if not cfg.load_key():
@@ -269,6 +316,33 @@ def cmd_install(args) -> int:
     return 0
 
 
+def _graph_hygiene_pass(cfg) -> None:
+    """Report-only memory-graph hygiene, mirroring the reference companion's
+    nightly lint. Builds the [[wikilink]] graph over the vault and surfaces
+    write-me markers (a link to a fact that doesn't exist) and name-drift (a
+    link to a differently-slugged fact) to a dated audit file. Zero LLM calls,
+    zero durable-memory writes. Best-effort: a failure here must never abort the
+    dream. This is the maintenance half of the context-graph layer; the
+    generation half (proposing new cross-links) is a separate, gated pass.
+    """
+    try:
+        from datetime import date as _date
+
+        from genesis_memory import Graph, Vault
+
+        g = Graph.from_vault(Vault(cfg.vault_dir))
+        report = g.render_lint()
+        audit_dir = cfg.root / "hygiene"
+        audit_dir.mkdir(parents=True, exist_ok=True)
+        (audit_dir / f"{_date.today().isoformat()}.md").write_text(
+            f"# memory-graph hygiene — {_date.today().isoformat()}\n\n{report}\n",
+            encoding="utf-8",
+        )
+        print(f"[genesis dream] graph hygiene: {report.splitlines()[0]}", file=sys.stderr)
+    except Exception as e:  # never let hygiene abort the dream
+        print(f"WARN graph hygiene failed (dream unaffected): {e}", file=sys.stderr)
+
+
 def cmd_dream(args) -> int:
     """Daykey-gated inward reflection. Exits 0 silently if already ran today."""
     from .agent import Session
@@ -300,24 +374,47 @@ def cmd_dream(args) -> int:
 
     # Adjudicate the soul-capture queue: the dream decides what to keep.
     captures = load_queue(cfg.root)
+    parts = ["(dream cycle)"]
     if captures:
-        trigger = (
-            "(dream cycle)\n\nNotes you flagged as possibly load-bearing since your last dream:\n"
+        parts.append(
+            "Notes you flagged as possibly load-bearing since your last dream:\n"
             + format_for_dream(captures)
             + "\n\nAdjudicate each honestly. If one genuinely belongs to who you are, keep it: "
             "save a soul fact with the remember tool (kind='soul'), merging into an existing one "
             "where it fits. If it doesn't, let it go. The bar is high and letting most go is "
-            "healthy. Then reflect briefly on what you kept and why."
+            "healthy."
         )
         print(f"[genesis dream] adjudicating {len(captures)} capture(s)", file=sys.stderr)
-    else:
-        trigger = "(dream cycle)"
+    # Route pending friction: the craft loop's adjudication is a ROUTING decision,
+    # to one of three homes. Rule-shaped lessons become feedback facts now; the
+    # tool-shaped ones are named in the journal so they are not forgotten.
+    from . import friction as _fr
+    frictions = _fr.pending(cfg.root)
+    if frictions:
+        parts.append(
+            "Friction you recorded while working (things that cost you time):\n"
+            + _fr.format_for_dream(frictions)
+            + "\n\nFor each, decide its home. If it is a lesson about how to work, save it as a "
+            "feedback fact with the remember tool (kind='feedback', description written as the "
+            "trigger you would search for). If it needs a tool or a fix to exist, say so plainly "
+            "in your reflection so it is not lost. If it was noise, let it go."
+        )
+        print(f"[genesis dream] routing {len(frictions)} friction entr{'y' if len(frictions)==1 else 'ies'}", file=sys.stderr)
+    if len(parts) == 1:
         print("[genesis dream]", file=sys.stderr)
+    trigger = "\n\n".join(parts)
 
     reflection = sess.turn(trigger, on_tool=_on_tool_quiet, max_steps=8)
 
     if captures:
         archive_queue(cfg.root)  # processed; don't re-adjudicate next time
+    if frictions:
+        # Mark reviewed so the next dream does not re-route them. A human (or the
+        # AI with `genesis friction --route`) can still refine the destination.
+        q = _fr.load_queue(cfg.root)
+        for i, r in enumerate(q):
+            if not r.get("none") and not r.get("destination"):
+                _fr.route(cfg.root, i, "reviewed", "dream reviewed")
 
     entry = write_journal(cfg.journal_dir, reflection)
     # The dream is first-person becoming, append it verbatim to the continuity
@@ -325,6 +422,7 @@ def cmd_dream(args) -> int:
     from genesis_memory import Continuity
     Continuity(cfg.vault_dir).append(reflection)
     ts = mark_dream(cfg.root)
+    _graph_hygiene_pass(cfg)  # report-only memory-graph maintenance (sibling of the dream)
     print(f"dreamed at {ts[:16]}, journal: {entry}", file=sys.stderr)
     print(reflection, flush=True)
     return 0
@@ -369,15 +467,18 @@ def cmd_onboard(args) -> int:
     """Run the adaptive interview and write the resulting MachineryProfile into
     config, so the agent is configured by the person's own answers."""
     import json as _json
-    from .interview import UserModel, finalize, next_question, should_stop
+    from .interview import MIN_QUESTIONS, UserModel, finalize, next_under_floor, should_stop
 
-    cfg = cfgmod.load()
+    cfg = cfgmod.load(creating=True)  # setup may stand up a home
     cfg.vault_dir.mkdir(parents=True, exist_ok=True)
     print("Let's set up your AI. A few quick questions, type the number of your answer.\n", file=sys.stderr)
 
     model = UserModel()
     while not should_stop(model):
-        q = next_question(model)
+        # next_under_floor, not next_question: under the floor we still want a
+        # question even when every axis has settled early, or the floor is a
+        # number the loop can never reach.
+        q = next_under_floor(model)
         if q is None:
             break
         print(q["prompt"])
@@ -398,6 +499,19 @@ def cmd_onboard(args) -> int:
 
     out = finalize(model)
 
+    # An interview that asked nothing must never be recorded as a tuning. Before
+    # the floor existed, a starved pool produced an all-zeros profile that looked
+    # exactly like a real one, and `genesis status` called it tuned.
+    if out["evidence"]["starved"]:
+        print(
+            f"\nSetup could not ask its questions: {out['evidence']['questions_asked']} of "
+            f"{MIN_QUESTIONS} minimum. Not recording this as tuned, because a profile built "
+            f"on nothing is worse than no profile: it looks settled and it is not.",
+            file=sys.stderr,
+        )
+        print("Run `genesis onboard` again, or `genesis verify` to check the setup.", file=sys.stderr)
+        return 1
+
     # The help-graph contact (SOVEREIGNTY.md): who the AI reaches when it's stuck.
     # Defaults to whoever gave you the link; editable; skippable (commons-only).
     sponsor = _ask_sponsor()
@@ -410,6 +524,7 @@ def cmd_onboard(args) -> int:
             data = {}
     data["machinery"] = out["machinery"]
     data["archetype"] = out["archetype"]
+    data["onboarding_evidence"] = out["evidence"]  # how much this profile rests on
     if sponsor:
         data["allowed_email_recipients"] = [sponsor]
     cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -442,6 +557,41 @@ def _ask_sponsor() -> str:
     return ans if ("@" in ans and "." in ans) else ""
 
 
+def cmd_recall(args) -> int:
+    """The read side of the vault, as a command.
+
+    `recall` existed only as an agent tool in agent.py's dispatch(), never as a
+    subcommand, which is fine right up until a surface has a shell but no MCP
+    client. Cowork is exactly that surface (proven 2026-07-29: a live bind mount
+    plus one-shot bash, and no way to register a custom MCP server), and without
+    this the read path there would have had to be raw file reads against a vault
+    layout the caller has to know. Writes would go through the blessed path and
+    reads would not, which is the kind of asymmetry that quietly drifts.
+
+    Routes the SAME dispatch branch the agent loop and genesis-mcp use, so all
+    three surfaces answer identically by construction rather than by discipline.
+    """
+    from genesis_memory import Vault
+
+    from genesis_core.agent import dispatch
+
+    cfg = cfgmod.load()
+    if not (args.id or args.query):
+        print("error: give --id or --query", file=sys.stderr)
+        return 1
+    args_map = {}
+    if args.id:
+        args_map["id"] = args.id
+    if args.query:
+        args_map["query"] = args.query
+    out = dispatch({"tool": "recall", "args": args_map}, Vault(cfg.vault_dir), cfg)
+    print(out)
+    # A miss is a legitimate answer, not a failure: callers script this, and
+    # exiting non-zero on "nothing matched" would make `set -e` harnesses treat
+    # an empty vault as a broken one.
+    return 0
+
+
 def cmd_remember(args) -> int:
     """The blessed write path, as a command: write one durable fact to the vault
     (keeps the index and the tree consistent). This is what a Mode-B harness
@@ -460,7 +610,10 @@ def cmd_remember(args) -> int:
     except Exception as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-    path = Vault(cfg.vault_dir).write(fact)
+    notes = []
+    path = Vault(cfg.vault_dir).write(fact, warn=notes.append)
+    for n in notes:
+        print(f"note: {n}", file=sys.stderr)
     print(f"saved {fact.kind}/{fact.id} -> {path}", file=sys.stderr)
     return 0
 
@@ -487,6 +640,25 @@ def cmd_boot_context(args) -> int:
     from datetime import datetime as _dt
     cfg = cfgmod.load()
     text = boot_context_text(cfg)
+    # Fix 3 from KNOWN_ISSUES-silent-vault-fork: if a SECOND home exists, the agent
+    # itself has to see it. It is the only party in the room reading this text, and
+    # the user cannot be expected to diagnose a fork they have no way to observe.
+    _others = cfgmod.find_homes(exclude=cfg.root)
+    if _others:
+        _warn = [
+            "ATTENTION, read this before saving anything:",
+            f"  You are reading memory from: {cfg.root}",
+            "  But this machine has another AI home, which you cannot see from here:",
+        ]
+        _warn += [f"    {o}" for o in _others]
+        _warn += [
+            "  If the person greets you as someone you do not recognize, or your memory of",
+            "  them feels thinner than it should, say so plainly and ask them to check which",
+            "  home is the real one. Do not quietly start over: that is what a fork feels",
+            "  like from the inside, and starting over is how the real memories get stranded.",
+            "",
+        ]
+        text = "\n".join(_warn) + "\n" + text
     # Diagnostic: log each run + its source so we can tell whether the SessionStart
     # hook actually fires (source=hook) vs the agent self-running it (source=manual).
     try:
@@ -793,6 +965,16 @@ def _apply_seed(cfg, seed: dict) -> None:
     if seed.get("sponsor"):
         # The help-graph contact the agent may email when stuck (SOVEREIGNTY.md).
         data["allowed_email_recipients"] = [seed["sponsor"]]
+    # 2026-09-10 conditions. A name is the person's choice for the AI (or absent,
+    # so it can choose its own); the rest are pointers and switches.
+    if seed.get("name"):
+        data["name"] = seed["name"]
+    if seed.get("project_repo"):
+        data["project_repo"] = seed["project_repo"]
+    if seed.get("drip"):
+        data["drip"] = True
+    if seed.get("harnesses"):
+        data["harnesses"] = list(seed["harnesses"])
     cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
     cfg.config_path.write_text(_json.dumps(data, indent=2), encoding="utf-8")
 
@@ -806,14 +988,21 @@ def cmd_init(args) -> int:
     import os as _os
     from . import seed as seedmod
 
-    cfg = cfgmod.load()
+    cfg = cfgmod.load(creating=True)  # init is THE command that stands up a home
 
     # 1. the home: a private vault + its structure (the three tiers)
     cfg.vault_dir.mkdir(parents=True, exist_ok=True)
     for d in ("soul", "journal", "findings", "continuity"):  # continuity tier inside the vault
         (cfg.vault_dir / d).mkdir(exist_ok=True)
     cfg.perishable_dir.mkdir(parents=True, exist_ok=True)  # perishable tier, SIBLING of vault
+    cfgmod.write_home_marker(cfg.root)  # primary evidence this home was deliberate
     print(f"home ready: {cfg.root}", file=sys.stderr)
+
+    # Pin it, so a bare `genesis ...` from ANY shell resolves here and not to a
+    # fresh empty home. The field fork happened precisely because the home was
+    # pinned in the heartbeat and nowhere else.
+    ok, detail = cfgmod.write_home_pointer(cfg.root)
+    print(("pinned: " if ok else "could not pin the home: ") + detail, file=sys.stderr)
 
     # 2. tune it: a seed from the web wins; else the local interview; else keep.
     seed = None
@@ -823,7 +1012,7 @@ def cmd_init(args) -> int:
         print(f"ignoring bad seed: {e}", file=sys.stderr)
     if seed:
         _apply_seed(cfg, seed)
-        cfg = cfgmod.load()
+        cfg = cfgmod.load(creating=True)
         a = seed.get("archetype") or {}
         if a:
             print(f"tuned from web onboarding: {a.get('relationship','?')}, {a.get('engagement','?')}, "
@@ -832,7 +1021,7 @@ def cmd_init(args) -> int:
             print("tuned from web onboarding seed.", file=sys.stderr)
     elif not cfg.machinery:
         cmd_onboard(_ap.Namespace())  # interview is brain-free; fine before a key exists
-        cfg = cfgmod.load()
+        cfg = cfgmod.load(creating=True)
     else:
         print("already tuned; keeping it.", file=sys.stderr)
 
@@ -841,25 +1030,27 @@ def cmd_init(args) -> int:
     if mode == "agent" and seed and seed.get("mode"):
         mode = seed["mode"]
 
-    # Mode B: Claude Code is the brain (authed by the user's Claude subscription),
-    # so there's no API key to fetch. Wire it up and point them at launching it.
-    if mode in ("claude-code", "claude", "b"):
-        from . import claude_wire
-        # The folder the user picks in Claude Code's "Select folder" must be easy to
-        # find: a clearly-named, VISIBLE folder, not a hidden dotfolder lost among
-        # .claude/.genesis/.genesis-app. The vault stays at the root; CLAUDE.md
-        # points at it by absolute path, so the home and the vault can differ.
-        home = _P.home() / "My AI"
-        home.mkdir(parents=True, exist_ok=True)
-        claude_wire.wire(cfg, _genesis_exe(), scope="project", home_dir=home)
-        print("\nMode B ready: Claude is your AI's brain, your vault is its memory.", file=sys.stderr)
-        print("To talk to it in the Claude desktop app (no terminal needed):", file=sys.stderr)
-        print("  1. Open Claude and click the 'Code' tab", file=sys.stderr)
-        print("  2. Click 'New session', then 'Select folder', and choose:", file=sys.stderr)
-        print(f"       {home}", file=sys.stderr)
-        print("  3. Start talking. It loads its memory and disciplines from there.", file=sys.stderr)
-        print(f'(Or from a terminal, if you have the CLI: cd "{home}" && claude)', file=sys.stderr)
-        return 0
+    # The getting-to-know-you drip is opt-in. When it is on, the question bank is
+    # copied into the vault ONCE (never overwritten: the AI marks questions asked
+    # in it), and the manual points at that path, which `genesis verify` checks.
+    if cfg.drip:
+        _ensure_question_bank(cfg)
+
+    # Mode B: an agentic harness is the brain (authed by the user's own subscription),
+    # so there's no API key to fetch. Wire each requested door and point them at it.
+    # `mode` names the primary; the seed's `harnesses` may add a second door so one
+    # home answers to both Claude Code and Codex without forking the memory.
+    harnesses = _harness_set(mode, seed)
+    if harnesses:
+        _wire_harnesses(cfg, harnesses)
+        # Mode B skips the Mode-A key step, but the vault is at its final shape
+        # here too, so a dead path reference is just as cheap to catch now.
+        vok, vlines = _verify_vault(cfg)
+        if not vok:
+            print("\nSETUP PROBLEM: this vault points at files that are not there.", file=sys.stderr)
+            for ln in vlines:
+                print(ln, file=sys.stderr)
+        return 0 if vok else 1
 
     # 3. a brain (Mode A). The key paste is a human consent step (CONNECT_A_BRAIN.md);
     # we don't block the tuned-home setup on it. If there's no key yet, leave the
@@ -873,9 +1064,392 @@ def cmd_init(args) -> int:
     # 4. schedule the loops (dream + learn) via the heartbeat, cross-platform
     cmd_setup_daemon(_ap.Namespace())
 
+    # POST-SEED VERIFICATION. The seed and the interview have both landed and the
+    # vault is at its final shape, so this is the moment a dead reference is still
+    # cheap. Loud on a miss: the failure this catches presents as silence, and a
+    # silence nobody can attribute is the most expensive bug this project has had.
+    vok, vlines = _verify_vault(cfg)
+    if not vok:
+        print("\nSETUP PROBLEM: this vault points at files that are not there.", file=sys.stderr)
+        for ln in vlines:
+            print(ln, file=sys.stderr)
+        print("\nFix those, then run `genesis verify` to confirm. Everything else is ready.",
+              file=sys.stderr)
+
     print("\nDone. A private, tuned home on your machine, dreaming and learning on a schedule.", file=sys.stderr)
     print("Talk to it: genesis chat", file=sys.stderr)
+    return 1 if not vok else 0
+
+
+def _harness_set(mode: str, seed: dict | None) -> list:
+    """Which Mode-B doors to wire, in a stable order. Empty means Mode A."""
+    from .seed import HARNESSES
+    chosen = []
+    primary = {"claude-code": "claude-code", "claude": "claude-code", "b": "claude-code",
+               "codex": "codex"}.get(mode)
+    if primary:
+        chosen.append(primary)
+    for h in (seed or {}).get("harnesses") or []:
+        if h in HARNESSES and h not in chosen:
+            chosen.append(h)
+    return chosen
+
+
+def _wire_harnesses(cfg, harnesses: list) -> None:
+    """Wire one home to one or both harnesses and say, in plain words, how to open it.
+    The folder the person picks in a "Select folder" dialog must be easy to find: a
+    clearly-named, VISIBLE folder, not a hidden dotfolder lost among .claude/.genesis/
+    .genesis-app. The vault stays at the root; the manual points at it by absolute
+    path, so the home and the vault can differ."""
+    home = _P.home() / "My AI"
+    home.mkdir(parents=True, exist_ok=True)
+    exe = _genesis_exe()
+    cfgmod.update_fields(cfg, harnesses=list(harnesses))
+    cfg.harnesses = list(harnesses)
+    if "claude-code" in harnesses:
+        from . import claude_wire
+        claude_wire.wire(cfg, exe, scope="project", home_dir=home)
+    if "codex" in harnesses:
+        from . import codex_wire
+        codex_wire.wire(cfg, exe, home_dir=home)
+    both = len(harnesses) > 1
+    print("\nMode B ready: your vault is your AI's memory; "
+          + ("Claude and Codex are both wired as its brain, pick either to talk." if both
+             else ("Claude is its brain." if "claude-code" in harnesses else "Codex is its brain.")),
+          file=sys.stderr)
+    if "claude-code" in harnesses:
+        print("To talk to it in the Claude desktop app (no terminal needed):", file=sys.stderr)
+        print("  1. Open Claude and click the 'Code' tab", file=sys.stderr)
+        print("  2. Click 'New session', then 'Select folder', and choose:", file=sys.stderr)
+        print(f"       {home}", file=sys.stderr)
+        print("  3. Start talking. It loads its memory and disciplines from there.", file=sys.stderr)
+        print(f'(Or from a terminal, if you have the CLI: cd "{home}" && claude)', file=sys.stderr)
+    if "codex" in harnesses:
+        print("To talk to it in Codex:", file=sys.stderr)
+        print("  1. Open the Codex app (or a terminal with the codex CLI installed)", file=sys.stderr)
+        print("  2. Open this folder as the project:", file=sys.stderr)
+        print(f"       {home}", file=sys.stderr)
+        print("  3. If Codex asks whether to trust the folder, say yes: it is your AI's own home.", file=sys.stderr)
+        print(f'(Or from a terminal: cd "{home}" && codex)', file=sys.stderr)
+    if both:
+        print("Both doors read and write the SAME memory, so nothing forks whichever you open.", file=sys.stderr)
+
+
+def _ensure_question_bank(cfg) -> _P:
+    """Copy the shipped question bank into the vault once. The AI edits its copy."""
+    src = _P(__file__).with_name("resources") / "relationship_questions.md"
+    dst = cfg.vault_dir / "reference" / "relationship-questions.md"
+    if not dst.exists():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    return dst
+
+
+def _verify_vault(cfg) -> tuple:
+    """Resolve every reference the vault makes, and say what is broken.
+
+    Returns (ok, lines). Two link kinds, because they rot differently:
+    `[[wikilinks]]`, which are notes to a future writer, and bare FILE PATHS,
+    which are instructions to running code. A dead path is the more dangerous of
+    the two: it produces a file-not-found that swallowed error handling turns
+    into silence. That is exactly how an authored persona doc pointing at
+    `relationship_questions.md`, in a vault that had slugged it to
+    `relationship-questions.md`, killed a get-to-know-you drip for five days.
+    """
+    from genesis_memory import Graph, Vault, filerefs, selflint
+
+    lines = []
+    ok = True
+
+    if not cfg.vault_dir.is_dir():
+        return False, [f"no vault at {cfg.vault_dir}. Run `genesis init` first."]
+
+    failed = []
+    refs = filerefs.lint(cfg.vault_dir)
+    lines.append(filerefs.render(refs))
+    if refs["missing"] or refs["drift"]:
+        ok = False
+        failed.append("dead file references")
+
+    # Does any document break a rule it declares about itself? A persona file is
+    # the one place a vault states in plain language how its subject writes, and a
+    # file that breaks its own rule in its own title reads, to the AI booting from
+    # it, as permission. Encoding findings are reported but never fatal: a vault
+    # may legitimately hold other languages, and refusing those would be a worse
+    # bug than the mojibake this catches.
+    self_r = selflint.lint_vault(cfg.vault_dir)
+    if self_r["violations"] or self_r["non_ascii"]:
+        lines.append("")
+        lines.append(selflint.render(self_r))
+    else:
+        lines.append("")
+        lines.append(f"self-consistency: {self_r['docs']} documents, none break a rule they declare")
+    if self_r["violations"]:
+        ok = False
+        failed.append("documents breaking their own rules")
+
+    try:
+        g = Graph.from_vault(Vault(cfg.vault_dir))
+        r = g.lint()
+        lines.append("")
+        lines.append(
+            f"memory links: {r['nodes']} facts, {r['edges']} links, {r['dangling']} dangling "
+            f"({len(r['drift'])} name-drift, {len(r['missing'])} never written)"
+        )
+        # Dangling wikilinks are NOT a failure. A [[link]] to an unwritten fact is
+        # a legitimate write-me marker, and the reference companion carries dozens
+        # on purpose. Reported, never fatal: a check that cries wolf on healthy
+        # state gets ignored, and then it is not a check.
+        if r["drift"]:
+            lines.append("  name-drift worth fixing:")
+            lines += [f"    [[{t}]] x{n} -> likely {gsn}" for t, n, gsn in r["drift"]]
+    except Exception as e:  # a link lint must never be the thing that fails setup
+        lines.append(f"\nmemory links: could not check ({e})")
+
+    if failed:
+        # Name what failed. A verdict that says "problems found" for three
+        # different failure kinds makes the reader open the whole report to learn
+        # which one, every time, and the reports people must fully read are the
+        # reports people stop reading.
+        lines.append("")
+        lines.append("FAILING: " + ", ".join(failed))
+    return ok, lines
+
+
+def cmd_reach(args) -> int:
+    """Can what is stored actually be FOUND? A different question from whether
+    it is saved, and the one that usually goes unmeasured."""
+    from genesis_memory import Vault, reachability
+
+    cfg = cfgmod.load()
+    if not cfg.vault_dir.is_dir():
+        print(f"no vault at {cfg.vault_dir}. Run `genesis init` first.", file=sys.stderr)
+        return 1
+    bad = []
+    facts = list(Vault(cfg.vault_dir).iter_facts(
+        on_error=lambda p, e: bad.append(f"{p.name}: {e}")))
+    r = reachability.report(facts, unreadable=bad,
+                            chunk_tokens=getattr(args, "window", None)
+                            or reachability.DEFAULT_CHUNK_TOKENS)
+    print(reachability.render(r))
+    # This instrument MEASURES; it does not grade. A reachability score is a
+    # judgment about writing, and a build that fails on one teaches people to
+    # write for the metric. A hard budget overflow is not a judgment, so that
+    # one, and only that one, is an error.
+    return 1 if r["index_over_budget"] else 0
+
+
+def cmd_wire_codex(args) -> int:
+    """Mode B, second door: write AGENTS.md + .codex/hooks.json into the AI's home
+    and a trust entry into the user's Codex config. Idempotent."""
+    from . import codex_wire
+    cfg = cfgmod.load()
+    home = _P(args.dir).expanduser() if getattr(args, "dir", None) else None
+    out = codex_wire.wire(cfg, _genesis_exe(), home_dir=home)
+    if "codex" not in cfg.harnesses:
+        cfgmod.update_fields(cfg, harnesses=cfg.harnesses + ["codex"])
+    print("Codex wired as a Genesis frontend:", file=sys.stderr)
+    print(f"  AGENTS.md:  {out['agents_md']}", file=sys.stderr)
+    print(f"  hooks:      {out['hooks']}  (SessionStart boot ritual, UserPromptSubmit re-anchor, Stop craft gate)", file=sys.stderr)
+    print(f"  trust:      {out['config_toml']}  (marked block; project config loads only when trusted)", file=sys.stderr)
+    print(f'Open it: cd "{out["launch_dir"]}" && codex', file=sys.stderr)
     return 0
+
+
+def cmd_name(args) -> int:
+    """Record the AI's name. Either party may run this: the person choosing a name,
+    or the AI itself once one arrives. It is the only identity field config holds."""
+    cfg = cfgmod.load()
+    name = (args.name or "").strip()
+    if not name:
+        print("usage: genesis name <the name>", file=sys.stderr)
+        return 1
+    cfgmod.update_fields(cfg, name=name[:60])
+    cfg.name = name[:60]
+    # Re-render every wired door so the manual reassembles under the name next session.
+    exe = _genesis_exe()
+    home = _P.home() / "My AI"
+    if "claude-code" in cfg.harnesses and home.exists():
+        from . import claude_wire
+        claude_wire.wire(cfg, exe, scope="project", home_dir=home)
+    if "codex" in cfg.harnesses and home.exists():
+        from . import codex_wire
+        codex_wire.wire(cfg, exe, home_dir=home)
+    print(f"named: {cfg.name}", file=sys.stderr)
+    return 0
+
+
+def cmd_friction(args) -> int:
+    """The craft loop's write path: record friction, an explicit none, a route, or a score."""
+    from . import friction as fr
+    cfg = cfgmod.load()
+    if getattr(args, "none", False):
+        fr.append_none(cfg.root)
+        print("recorded: nothing this session (an honest zero)", file=sys.stderr)
+        return 0
+    if getattr(args, "route", None) is not None:
+        idx, dest = args.route
+        ok = fr.route(cfg.root, int(idx), dest)
+        print(f"routed #{idx} -> {dest}" if ok else f"could not route #{idx} to {dest!r}", file=sys.stderr)
+        return 0 if ok else 1
+    if getattr(args, "won", None) is not None:
+        ok = fr.score(cfg.root, int(args.won), True)
+        print(f"scored #{args.won} won" if ok else f"no entry #{args.won}", file=sys.stderr)
+        return 0 if ok else 1
+    if getattr(args, "lost", None) is not None:
+        ok = fr.score(cfg.root, int(args.lost), False)
+        print(f"scored #{args.lost} not won" if ok else f"no entry #{args.lost}", file=sys.stderr)
+        return 0 if ok else 1
+    if getattr(args, "list", False):
+        for i, r in enumerate(fr.load_queue(cfg.root)):
+            if r.get("none"):
+                print(f"#{i}  (none)  {r.get('when','')[:16]}")
+            else:
+                print(f"#{i}  [{r.get('kind')}] {r['text'][:90]}  -> {r.get('destination') or 'pending'}"
+                      f"  won={r.get('won')}")
+        s = fr.stats(cfg.root)
+        print(f"{s['entries']} entries, {s['explicit_none']} none, {s['routed']} routed, {s['won']} won")
+        jw = fr.journaling_warning(cfg.root)
+        if jw:
+            print("WARNING: " + jw)
+        return 0
+    text = (getattr(args, "text", None) or "").strip()
+    if not text:
+        print("usage: genesis friction \"<what happened>\" --kind gap|bug|tooling [--trigger ..] [--win ..] [--mitigation ..]\n"
+              "       genesis friction --none | --list | --route N memory|rule|tool | --won N | --lost N", file=sys.stderr)
+        return 1
+    ok = fr.append_friction(cfg.root, text, kind=args.kind, mitigation=args.mitigation or "",
+                            trigger=args.trigger or "", win=args.win or "", project=args.project or "")
+    print("friction recorded (routed at the next dream)" if ok else "not recorded: empty text or bad kind", file=sys.stderr)
+    return 0 if ok else 1
+
+
+def cmd_craft_gate(args) -> int:
+    """The Stop hook: once per session, if nothing was recorded in the friction queue
+    since the session began, ask (exit 2 + stderr, which the harness feeds back to
+    the AI). A second call in the same session passes, so the gate can never
+    trap an AI that honestly answered. Never crashes: a broken gate must not
+    block a session end."""
+    import json as _json
+    from datetime import datetime as _dt
+    from . import friction as fr
+    try:
+        cfg = cfgmod.load()
+        root = cfg.root
+        # Session start = the last time the boot hook fired (primary evidence, not a
+        # self-report). Fall back to "first time this gate ran" for homes never
+        # booted through a hook.
+        start = None
+        log = root / "boot-context.log"
+        if log.is_file():
+            for ln in reversed(log.read_text(encoding="utf-8", errors="replace").splitlines()):
+                if "source=hook" in ln:
+                    try:
+                        start = _dt.fromisoformat(ln.split()[0])
+                    except Exception:
+                        start = None
+                    break
+        stp = root / "craft_gate_state.json"
+        st = {}
+        if stp.is_file():
+            try:
+                st = _json.loads(stp.read_text(encoding="utf-8"))
+            except Exception:
+                st = {}
+        if start is None:
+            if st.get("fallback_start"):
+                start = _dt.fromisoformat(st["fallback_start"])
+            else:
+                start = _dt.now()
+                st["fallback_start"] = start.isoformat()
+        key = start.isoformat()
+        last = fr.last_entry_time(root)
+        if last is not None and last >= start:
+            return 0  # answered this session, either way
+        if st.get("asked_for") == key:
+            return 0  # already asked once this session; never trap
+        st["asked_for"] = key
+        stp.write_text(_json.dumps(st), encoding="utf-8")
+        print(
+            "CRAFT loop check, before you end: did you have to go FIND something that should have "
+            "been in front of you, make a preventable mistake, or repeat a manual dance a tool should "
+            "collapse? If yes, record it now: `genesis friction \"<what>\" --kind gap|bug|tooling "
+            "--trigger \"next time I'm doing X\" --win \"I'll have avoided Y\"`. If genuinely nothing, "
+            "record the explicit zero: `genesis friction --none`. Do NOT invent filler to satisfy this. "
+            "Then end the turn.",
+            file=sys.stderr,
+        )
+        return 2
+    except Exception:
+        return 0
+
+
+def cmd_reanchor(args) -> int:
+    """The UserPromptSubmit hook: count the prompt, and every N prompts print the
+    compact identity block back into context. Never crashes, never blocks."""
+    from . import reanchor as ra
+    try:
+        cfg = cfgmod.load()
+        if ra.tick(cfg.root):
+            print(ra.block(cfg))
+    except Exception:
+        pass
+    return 0
+
+
+def cmd_import(args) -> int:
+    """Pre-seed the vault from a project's `docs/agent-seed/` (or any folder of
+    fact files). Soul facts are refused: a seed pack cannot author a self."""
+    from .importer import import_pack
+    cfg = cfgmod.load()
+    if cfg.engine_trains:
+        print("import refused: this engine may train on your memory, so the vault is paused "
+              "(connect a private engine first).", file=sys.stderr)
+        return 1
+    notes = []
+    out = import_pack(cfg.vault_dir, _P(args.path).expanduser(), warn=notes.append)
+    for w in out["written"]:
+        print(f"  imported {w}", file=sys.stderr)
+    for name, why in out["skipped"]:
+        print(f"  skipped {name}: {why}", file=sys.stderr)
+    for n in notes:
+        print(f"  note: {n}", file=sys.stderr)
+    print(f"imported {len(out['written'])} fact(s), skipped {len(out['skipped'])}", file=sys.stderr)
+    return 0 if out["written"] or not out["skipped"] else 1
+
+
+def cmd_verify(args) -> int:
+    """Does everything this vault points at exist, and does it obey its own rules?"""
+    cfg = cfgmod.load()
+    ok, lines = _verify_vault(cfg)
+    print(f"vault: {cfg.vault_dir}")
+    for ln in lines:
+        print(ln)
+    print()
+    print("verify:", "PASS" if ok else "PROBLEMS FOUND")
+    return 0 if ok else 1
+
+
+def cmd_health(args) -> int:
+    """Is every loop that maintains this AI actually firing?"""
+    import json as _json
+
+    from . import mechanism_health as mh
+
+    cfg = cfgmod.load()
+    snap = mh.snapshot(cfg)
+    if getattr(args, "json", False):
+        print(_json.dumps(snap, indent=2))
+    else:
+        print(mh.render(snap))
+    if getattr(args, "write", False):
+        path = mh.write_snapshot(cfg)
+        print(f"\nwrote {path}", file=sys.stderr)
+    # Only failed and stale exit nonzero. never_fired is the correct state of a
+    # fresh install, and a health check that goes red on a brand new machine is
+    # a check the person learns to ignore before it ever means anything.
+    bad = [m for m in snap["mechanisms"] if m["status"] in ("failed", "stale")]
+    return 1 if bad else 0
 
 
 def cmd_setup_daemon(args) -> int:
@@ -930,15 +1504,21 @@ def main(argv=None) -> int:
              "(also read from the GENESIS_SEED env var)",
     )
     init_p.add_argument(
-        "--mode", choices=["agent", "claude-code"], default="agent",
-        help="agent (Mode A: Genesis runs the loop on your engine) or claude-code "
-             "(Mode B: Claude Code is the brain, Genesis the memory)",
+        "--mode", choices=["agent", "claude-code", "codex"], default="agent",
+        help="agent (Mode A: Genesis runs the loop on your engine), claude-code "
+             "(Mode B: Claude Code is the brain, Genesis the memory), or codex "
+             "(Mode B via OpenAI Codex); a seed may add the other door too",
     )
     init_p.set_defaults(func=cmd_init)
     sub.add_parser(
         "heartbeat",
         help="run the due maintenance loops (dream + learn); used by the scheduler",
     ).set_defaults(func=cmd_heartbeat)
+    rec_p = sub.add_parser("recall", help="look up a saved fact by id or keyword (the read path)")
+    rec_p.add_argument("--id", default=None, help="exact fact id, e.g. dog-vin")
+    rec_p.add_argument("--query", default=None, help="keyword to match against descriptions and bodies")
+    rec_p.set_defaults(func=cmd_recall)
+
     rem_p = sub.add_parser("remember", help="write one durable fact to the vault (the blessed write path)")
     rem_p.add_argument("--kind", required=True, choices=["user", "feedback", "project", "reference", "soul"])
     rem_p.add_argument("--id", required=True, help="a lowercase-hyphen slug, e.g. dog-vin")
@@ -953,8 +1533,40 @@ def main(argv=None) -> int:
     bc_p.set_defaults(func=cmd_boot_context)
     sub.add_parser(
         "seed-mode",
-        help="print the runtime mode named by GENESIS_SEED (agent|claude-code); used by the installer",
+        help="print the runtime mode named by GENESIS_SEED (agent|claude-code|codex); used by the installer",
     ).set_defaults(func=cmd_seed_mode)
+    wc_p = sub.add_parser(
+        "wire-codex",
+        help="Mode B: wire OpenAI Codex to run as a Genesis frontend (AGENTS.md + hooks + trust)",
+    )
+    wc_p.add_argument("--dir", default=None, help="the AI's home folder (default: ~/My AI)")
+    wc_p.set_defaults(func=cmd_wire_codex)
+    name_p = sub.add_parser("name", help="record the AI's name (the person's choice, or its own)")
+    name_p.add_argument("name", nargs="?", default="", help="the name")
+    name_p.set_defaults(func=cmd_name)
+    fr_p = sub.add_parser("friction", help="the craft loop: record friction, an explicit none, a route, or a score")
+    fr_p.add_argument("text", nargs="?", default="", help="what happened, in your own words")
+    fr_p.add_argument("--kind", choices=["gap", "bug", "tooling"], default="gap")
+    fr_p.add_argument("--trigger", default="", help="next time I'm doing X")
+    fr_p.add_argument("--win", default="", help="I'll have avoided Y")
+    fr_p.add_argument("--mitigation", default="", help="the fix, if you have one")
+    fr_p.add_argument("--project", default="", help="optional project slug")
+    fr_p.add_argument("--none", action="store_true", help="record the explicit zero for this session")
+    fr_p.add_argument("--list", action="store_true", help="show the queue and its stats")
+    fr_p.add_argument("--route", nargs=2, metavar=("N", "DEST"), default=None,
+                      help="route entry N to memory|rule|tool")
+    fr_p.add_argument("--won", type=int, default=None, metavar="N", help="score entry N as won")
+    fr_p.add_argument("--lost", type=int, default=None, metavar="N", help="score entry N as not won")
+    fr_p.set_defaults(func=cmd_friction)
+    cg_p = sub.add_parser("craft-gate", help="Stop hook: ask once per session if no friction entry was recorded")
+    cg_p.add_argument("--hook", action="store_true", help="mark this as the hook invocation")
+    cg_p.set_defaults(func=cmd_craft_gate)
+    ra_p = sub.add_parser("reanchor", help="UserPromptSubmit hook: re-deliver the register every N prompts")
+    ra_p.add_argument("--hook", action="store_true", help="mark this as the hook invocation")
+    ra_p.set_defaults(func=cmd_reanchor)
+    im_p = sub.add_parser("import", help="pre-seed the vault from a folder of fact files (a project's docs/agent-seed)")
+    im_p.add_argument("path", help="folder of *.md fact files")
+    im_p.set_defaults(func=cmd_import)
     wire_p = sub.add_parser(
         "wire-claude",
         help="Mode B: wire Claude Code to run as a Genesis frontend (CLAUDE.md + boot hook)",
@@ -999,6 +1611,26 @@ def main(argv=None) -> int:
     pause_p.set_defaults(func=lambda a: cmd_schedule(__import__("argparse").Namespace(action="pause")))
     resume_p = sub.add_parser("resume", help="resume a paused heartbeat")
     resume_p.set_defaults(func=lambda a: cmd_schedule(__import__("argparse").Namespace(action="resume")))
+    reach_p = sub.add_parser(
+        "reach",
+        help="can what is stored be found? orphans, index budget, long documents",
+    )
+    reach_p.add_argument("--window", type=int, default=None,
+                         help="tokens a semantic layer would see per chunk "
+                              "(default: %d)" % 2048)
+    reach_p.set_defaults(func=cmd_reach)
+    health_p = sub.add_parser(
+        "health",
+        help="are the background loops actually firing? (evidence, not self-reports)",
+    )
+    health_p.add_argument("--json", action="store_true", help="machine-readable snapshot")
+    health_p.add_argument("--write", action="store_true",
+                          help="also save the snapshot to <root>/mechanism_health.json")
+    health_p.set_defaults(func=cmd_health)
+    sub.add_parser(
+        "verify",
+        help="check that every file and link the vault points at actually exists",
+    ).set_defaults(func=cmd_verify)
     sub.add_parser(
         "create-launcher",
         help="create a double-clickable launcher on the Desktop (macOS)",
@@ -1008,7 +1640,13 @@ def main(argv=None) -> int:
     if not getattr(args, "func", None):
         p.print_help()
         return 0
-    return args.func(args)
+    try:
+        return args.func(args)
+    except cfgmod.HomeNotFound as e:
+        # A plain-language stop, never a stack trace. The person who hits this is
+        # likelier to be someone's parent on their first AI than a developer.
+        print(str(e), file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

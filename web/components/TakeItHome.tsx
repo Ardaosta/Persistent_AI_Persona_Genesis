@@ -49,7 +49,9 @@ export default function TakeItHome({ seed }: { seed: Seed }) {
     { id: "linux", label: "Linux" },
   ];
 
-  const claudeMode = seed.mode === "claude-code";
+  const claude = seed.harnesses.includes("claude-code");
+  const codex = seed.harnesses.includes("codex");
+  const modeB = claude || codex;
 
   const dblclick =
     os === "windows"
@@ -58,9 +60,13 @@ export default function TakeItHome({ seed }: { seed: Seed }) {
         ? "Double-click the downloaded file. If macOS blocks it, right-click it and choose Open."
         : "Make it executable and run it (chmod +x, then ./genesis-setup.sh).";
 
-  const tail = claudeMode
-    ? " It downloads your AI and wires it to Claude. When it finishes, open the Claude app, click the Code tab, and Select the folder it names. (You'll need the Claude app installed and signed in.)"
-    : " It downloads your AI, sets it up tuned to your answers, then starts talking to you and helps you connect a brain.";
+  const tail = !modeB
+    ? " It downloads your AI, sets it up tuned to your answers, then starts talking to you and helps you connect a brain."
+    : claude && codex
+      ? " It downloads your AI and wires it to both Claude and Codex, one memory behind both. When it finishes, open either app and choose the folder it names (\"My AI\" in your home folder). You'll need the app installed and signed in."
+      : claude
+        ? " It downloads your AI and wires it to Claude. When it finishes, open the Claude app, click the Code tab, and Select the folder it names. (You'll need the Claude app installed and signed in.)"
+        : " It downloads your AI and wires it to Codex. When it finishes, open the Codex app (or run codex in a terminal) in the folder it names, and say yes when it asks to trust the folder. (You'll need Codex installed and signed in to ChatGPT.)";
 
   return (
     <div className="takehome">
