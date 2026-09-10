@@ -27,7 +27,7 @@ live, set `ANTHROPIC_API_KEY` (and optionally `GENESIS_GUIDE_MODEL`).
 
 ## Deploy (Vercel)
 
-Connected to your own GitHub account. Set the project root to `web/`, add
+Connected to a GitHub account. Set the project root to `web/`, add
 `ANTHROPIC_API_KEY` as an environment variable, and push — auto-deploys.
 
 ## Design decisions (2026-06-18)

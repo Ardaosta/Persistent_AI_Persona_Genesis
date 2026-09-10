@@ -79,11 +79,12 @@ Write-Host "Standing up your AI's home (tuned to your setup answers)..."
 $Genesis = Join-Path $AppDir ".venv\Scripts\genesis.exe"
 $Mode = (& $VPy -m genesis_core.cli seed-mode).Trim()
 
-if ($Mode -eq "claude-code") {
-  # Mode B: Claude is the brain. init already wired CLAUDE.md + the boot hook and
-  # printed how to open it in the Claude desktop app. Nothing to launch here.
+if (($Mode -eq "claude-code") -or ($Mode -eq "codex")) {
+  # Mode B: an agentic harness (Claude Code and/or Codex) is the brain. init
+  # already wired every requested door and printed how to open each. Nothing to
+  # launch here.
   Write-Host ""
-  Write-Host "All set. Follow the steps above to open your AI in the Claude app's 'Code' tab."
+  Write-Host "All set. Follow the steps above to open your AI in the app named there."
 } else {
   # Mode A: a double-click "Talk to your AI" launcher, then flow straight into
   # connecting a brain + the first conversation (the agent guides the key step).

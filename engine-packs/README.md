@@ -18,6 +18,8 @@ Reference knowledge + content-free config templates that let the install agent w
 
 all content-free, so identity stays un-authored. Supported engines get the pack and the install agent auto-bootstraps them; any other engine still works via Mode A with manual setup.
 
+Since 2026-09-10 every pack also carries two more hooks beside the boot ritual: a **register re-anchor** (`UserPromptSubmit`, every 10 prompts, because boot-only identity injection is a diagnosed failure) and the **craft gate** (`Stop`, once per session, asking for a friction entry or an explicit none). The manual both doors read is rendered from one source, `genesis_core/manual.py`.
+
 ## Recommendation: agentic engines only
 
 Genesis runs on whatever LLM the user wants, but we **only recommend true agentic models** — ones that do reliable multi-step native tool use. A chat-only model can't be a capable Companion because it can't *act*. "Supported" = we ship a pack and auto-bootstrap; "any engine" = works via Mode A's seam, manual, no promises on agentic depth.
@@ -25,4 +27,5 @@ Genesis runs on whatever LLM the user wants, but we **only recommend true agenti
 ## Status
 
 - `claude-code/` — **shipped**, grounded in the reference companion. Recommended. Modes A + B.
-- `openai/`, `gemini/`, `grok/` — **research-needed stubs.** Each needs its agentic harness mapped (with a grounded research pass) before we claim Mode B support. Do not fabricate harness details.
+- `codex/` — **shipped 2026-09-10**, verified against the current Codex docs. Recommended. Modes A + B. One home can carry BOTH doors (`harnesses: ["claude-code", "codex"]` in a seed, or `genesis wire-codex` after a Claude install); they render the same manual from one source and read the same vault.
+- `gemini/`, `grok/` — **research-needed stubs.** Each needs its agentic harness mapped (with a grounded research pass) before we claim Mode B support. Do not fabricate harness details.

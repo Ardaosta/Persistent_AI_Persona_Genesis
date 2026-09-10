@@ -16,12 +16,12 @@ import {
   applyAnswer,
   emptyModel,
   finalize,
-  nextQuestion,
+  nextUnderFloor,
   shouldStop,
 } from "@/lib/interview";
 import { interpretLook } from "@/lib/looks";
 import { PERSONAS, type Step } from "@/lib/personas";
-import { makeSeed } from "@/lib/seed";
+import { type Harness, makeSeed } from "@/lib/seed";
 import { CAP_LABELS, CapabilityIcon } from "./CapabilityIcon";
 import TakeItHome from "./TakeItHome";
 
@@ -163,7 +163,9 @@ export default function AdaptiveCanvas() {
   const showInterviewQuestion = useCallback(
     (beatIndex: number) => {
       const m = interviewModel.current;
-      const q = shouldStop(m) ? null : nextQuestion(m);
+      // nextUnderFloor, not nextQuestion: below MIN_QUESTIONS we still want a
+      // question even when every axis settled early, or the floor never lands.
+      const q = shouldStop(m) ? null : nextUnderFloor(m);
       if (!q) {
         const out = finalize(m);
         intake.current.interview = JSON.stringify(out.archetype);
@@ -265,15 +267,26 @@ export default function AdaptiveCanvas() {
     try {
       if (intake.current.machinery) machinery = JSON.parse(intake.current.machinery);
     } catch {}
-    // The brain choice maps to runtime mode + provider. Claude = Mode B (Claude
-    // Code is the brain); anything else = Mode A on the free Gemini path.
-    const claude = intake.current.brain === "claude";
+    // The brain choice maps to runtime mode + provider + doors. Claude and Codex
+    // are Mode B (an agentic harness is the brain); "both" wires two doors onto
+    // one memory with Claude as the primary; anything else is Mode A on Gemini.
+    const brain = intake.current.brain;
+    const harnesses: Harness[] =
+      brain === "claude" ? ["claude-code"]
+      : brain === "codex" ? ["codex"]
+      : brain === "both" ? ["claude-code", "codex"]
+      : [];
+    const modeB = harnesses.length > 0;
     return makeSeed({
       archetype,
       machinery,
       look: intake.current.look ?? null,
-      provider: claude ? "anthropic" : "gemini",
-      mode: claude ? "claude-code" : "agent",
+      provider: brain === "codex" ? "openai" : modeB ? "anthropic" : "gemini",
+      mode: brain === "codex" ? "codex" : modeB ? "claude-code" : "agent",
+      harnesses,
+      name: intake.current.name || null,
+      drip: intake.current.drip === "yes",
+      project_repo: intake.current.project_repo || null,
       sponsor: intake.current.sponsor || null, // help-graph contact (skippable)
     });
   }, []);

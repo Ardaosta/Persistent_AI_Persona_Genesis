@@ -49,9 +49,10 @@ line of trust the thing spread through. Two tiers, both outbound, both safe:
 
 1. **Search the curated commons** (read-only knowledge base) first. Safe by
    construction; nothing there can act on the agent.
-2. **Email its sponsor**, the person who handed the link to its user. Each
-   sponsor supports who they shared with; nobody sits in everyone's path. It
-   scales organically with no central support burden and no public surface.
+2. **Email its sponsor** — the person who handed the link to its user. A
+   supports who A shared with; B supports who B shares with; nobody
+   sits in everyone's path. It scales organically with no central support burden
+   and no public surface.
 
 Disciplines on the sponsor channel (small and trusted, but not magic):
 
@@ -105,6 +106,6 @@ But we do not keep a key to their house.
   is trusted, and that trust must be earned and auditable).
 - **Sponsor-consent UX** at share-time (making "list me as a help contact" a clear,
   deliberate yes).
-- **"Sponsor" for the near circle vs. the open world:** the near circle gets a
-  real person (whoever shared it); a stranger's chain eventually needs the commons
+- **"Sponsor" for the near circle vs. the open world:** the author's circle gets a
+  real person; a stranger's chain eventually needs the commons
   to stand in where no human sponsor is reachable.

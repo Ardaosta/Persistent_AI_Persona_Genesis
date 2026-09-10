@@ -75,11 +75,12 @@ case ":$PATH:" in
   *) say "(the 'genesis' command lives at $BIN_DIR/genesis; add $BIN_DIR to your PATH to call it by name)" ;;
 esac
 
-if [ "$MODE" = "claude-code" ]; then
-  # Mode B: Claude is the brain. init already wired it and printed how to open it
-  # in the Claude desktop app. Nothing to launch here.
+if [ "$MODE" = "claude-code" ] || [ "$MODE" = "codex" ]; then
+  # Mode B: an agentic harness (Claude Code and/or Codex) is the brain. init
+  # already wired every requested door and printed how to open each. Nothing to
+  # launch here.
   say ""
-  say "All set. Follow the steps above to open your AI in the Claude app's 'Code' tab."
+  say "All set. Follow the steps above to open your AI in the app named there."
 else
   # Mode A: a double-click "Talk to your AI" launcher, then flow straight into
   # connecting a brain + the first conversation.

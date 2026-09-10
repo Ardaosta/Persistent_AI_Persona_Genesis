@@ -26,7 +26,14 @@ SEED_VERSION = 1
 # reach when stuck. `mode` picks the runtime: "agent" (Mode A, Genesis runs the
 # loop on the chosen engine) or "claude-code" (Mode B, Claude Code is the brain,
 # Genesis the memory). Conditions, never content.
-_ALLOWED = {"v", "archetype", "machinery", "look", "provider", "sponsor", "mode"}
+# Added 2026-09-10: `name` (the person's chosen name for the AI, or empty to let
+# it name itself), `harnesses` (which Mode-B doors to wire: claude-code, codex,
+# or both; `mode` stays the primary), `project_repo` (a repository the AI is
+# joining, so it can import that project's seed pack), and `drip` (opt-in to
+# the getting-to-know-you question drip). Still conditions, never content.
+_ALLOWED = {"v", "archetype", "machinery", "look", "provider", "sponsor", "mode",
+            "name", "harnesses", "project_repo", "drip"}
+HARNESSES = ("claude-code", "codex")
 
 
 def make_seed(
@@ -37,6 +44,10 @@ def make_seed(
     provider: str | None = None,
     sponsor: str | None = None,
     mode: str | None = None,
+    name: str | None = None,
+    harnesses: list | None = None,
+    project_repo: str | None = None,
+    drip: bool = False,
 ) -> dict:
     return {
         "v": SEED_VERSION,
@@ -46,6 +57,10 @@ def make_seed(
         "provider": provider or None,
         "sponsor": sponsor or None,
         "mode": mode or None,
+        "name": (name or "").strip()[:60] or None,
+        "harnesses": [h for h in (harnesses or []) if h in HARNESSES],
+        "project_repo": (project_repo or "").strip()[:300] or None,
+        "drip": bool(drip),
     }
 
 
@@ -76,6 +91,12 @@ def decode(blob: str) -> dict:
         clean["machinery"] = {}
     if not isinstance(clean.get("archetype"), dict):
         clean["archetype"] = {}
+    # Coerce the 2026-09-10 keys the same way: a malformed seed degrades, never crashes.
+    clean["harnesses"] = [h for h in (clean.get("harnesses") or []) if h in HARNESSES] \
+        if isinstance(clean.get("harnesses"), list) else []
+    clean["name"] = str(clean["name"]).strip()[:60] if clean.get("name") else None
+    clean["project_repo"] = str(clean["project_repo"]).strip()[:300] if clean.get("project_repo") else None
+    clean["drip"] = bool(clean.get("drip", False))
     return clean
 
 

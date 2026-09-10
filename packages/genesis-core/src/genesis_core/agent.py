@@ -39,6 +39,7 @@ from genesis_core.email_tool import (
 )
 from genesis_core.relational import RelationalProfile, disposition_for
 from genesis_core.capture import append_capture
+from genesis_core.friction import append_friction, append_none as append_friction_none
 from genesis_core.boot import (
     handshake_instruction,
     handshake_token,
@@ -140,6 +141,29 @@ _MEMORY_TOOLS = [
             "required": ["text"],
         },
     ),
+    ToolSpec(
+        name="friction",
+        description=(
+            "Record friction: you had to go find something that should have been in front "
+            "of you, made a preventable mistake, or repeated a manual dance a tool should "
+            "collapse. Capture it the moment it is past, because solved problems stop "
+            "feeling like friction. Give a trigger (next time I'm doing X) and a win "
+            "condition (I'll have avoided Y) so it can be scored later. Pass none=true to "
+            "record an honest 'nothing this session'; that is common and healthy, and never "
+            "invent filler to have something to say."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "what happened, in your own words"},
+                "kind": {"type": "string", "enum": ["gap", "bug", "tooling"]},
+                "trigger": {"type": "string", "description": "next time I'm doing X"},
+                "win": {"type": "string", "description": "I'll have avoided Y"},
+                "mitigation": {"type": "string", "description": "the fix, if you have one"},
+                "none": {"type": "boolean", "description": "true = explicit zero for this session"},
+            },
+        },
+    ),
 ]
 
 _ACTION_TOOLS = [SHELL_TOOL, FILE_READ_TOOL, FILE_WRITE_TOOL]
@@ -191,13 +215,34 @@ def dispatch(call: dict, vault: Vault, cfg=None) -> str:
             return f"error: missing arg {e}"
         except Exception as e:
             return f"error: {e}"
-        vault.write(f)
-        return f"saved {f.kind}/{f.id}"
+        # The warnings come back in the tool_result, so the AI hears them in the
+        # same turn it wrote the fact, while the text is still in front of it and
+        # editing is one more tool call. A note filed where only a human report
+        # will show it arrives to nobody who can act on it.
+        notes = []
+        vault.write(f, warn=notes.append)
+        saved = f"saved {f.kind}/{f.id}"
+        if notes:
+            saved += "\n" + "\n".join(f"note: {n}" for n in notes)
+        return saved
     if name == "capture":
         if cfg is None:
             return "error: capture needs config"
         ok = append_capture(cfg.root, args.get("text", ""), args.get("why", ""))
         return "captured" if ok else "error: capture needs text"
+    if name == "friction":
+        if cfg is None:
+            return "error: friction needs config"
+        if args.get("none"):
+            append_friction_none(cfg.root)
+            return "recorded: nothing this session (an honest zero)"
+        ok = append_friction(
+            cfg.root, args.get("text", ""), kind=args.get("kind") or "gap",
+            trigger=args.get("trigger", ""), win=args.get("win", ""),
+            mitigation=args.get("mitigation", ""),
+        )
+        return "friction recorded (routed to memory / rule / tool at the next dream)" if ok \
+            else "error: friction needs text and a kind of gap, bug, or tooling"
     if name == "recall":
         fid = args.get("id")
         if fid:

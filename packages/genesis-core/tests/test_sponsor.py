@@ -63,7 +63,7 @@ class TestCheck(unittest.TestCase):
 
     def test_check_appends_and_marks_seen(self):
         cfg = _cfg(self.root)
-        raw = (b"From: A Sponsor <sponsor@example.com>\r\nSubject: re: stuck\r\n\r\n"
+        raw = (b"From: Sponsor <sponsor@example.com>\r\nSubject: re: stuck\r\n\r\n"
                b"Try the MODBUS poly 0xA001.\r\n")
         fake = mock.MagicMock()
         fake.search.return_value = ("OK", [b"7"])

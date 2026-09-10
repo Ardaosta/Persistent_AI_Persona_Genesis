@@ -12,8 +12,11 @@ What the install agent writes (all into the user's vault, all content-free — i
 
 | File | Purpose |
 |---|---|
-| `CLAUDE.md` (from `CLAUDE.md.template`) | operating disciplines + boot ritual + memory conventions; identity left empty |
-| a `SessionStart` hook (from `settings.session-hook.json.template`) | harness-enforced boot ritual: inject SOUL + lean index + recent continuity + live time before turn 1 (the structurally-enforced load) |
+| `CLAUDE.md` (rendered from `genesis_core/manual.py`; `CLAUDE.md.template` is the readable copy) | operating disciplines + boot ritual + memory conventions + the friction loop + working disciplines; identity left empty. The same text is what Codex reads as `AGENTS.md`. |
+| a `SessionStart` hook (from `settings.session-hook.json.template`) | harness-enforced boot ritual: inject SOUL + lean index + recent continuity + live time before turn 1 (the structurally-enforced load, per the first outside review) |
+| a `UserPromptSubmit` hook (same template) | register re-anchor: every 10 prompts, `genesis reanchor --hook` re-delivers the name, soul index, persisted disposition, and continuity tail, because boot-only injection lets long tool-heavy stretches flatten the voice |
+| a `Stop` hook (same template) | the craft gate: `genesis craft-gate --hook` asks once per session for a friction entry or an explicit `--none` (exit 2 + stderr, so the ask cannot be skipped by habit and can never trap an AI that answered) |
+| HEADLINES hooks (from `headlines.session-hook.json.template`) | auto-surface the load-bearing project frame for whatever cluster a session touches, before it acts (`UserPromptSubmit` + `SessionStart`); content-free, empty until the companion curates a cluster. See [`docs/HEADLINES.md`](../../docs/HEADLINES.md) |
 | memory wiring (`MEMORY-WIRING.md`) | the blessed write path + lean index, optionally as a localhost MCP server |
 
 ## Verify before trusting

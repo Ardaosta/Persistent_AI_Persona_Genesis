@@ -86,8 +86,18 @@ class TestSeededInit(unittest.TestCase):
     def setUp(self):
         self._td = tempfile.TemporaryDirectory()
         self.root = Path(self._td.name)
+        # HERMETIC, for the whole class. `genesis init` now pins the home in the
+        # user's shell profile, which is a write OUTSIDE the temp root and lands
+        # in the real ~/.zshrc unless Path.home() is redirected. It did exactly
+        # that once, pinning GENESIS_ROOT to a temp dir that then got cleaned up,
+        # which would have sent every new terminal at a home that was not there.
+        # A test that reaches live global state is a test that breaks the machine
+        # it runs on, and it breaks it most reliably when the suite is busiest.
+        self._home = mock.patch.object(Path, "home", staticmethod(lambda: self.root))
+        self._home.start()
 
     def tearDown(self):
+        self._home.stop()
         self._td.cleanup()
 
     def test_init_applies_seed_without_a_key(self):
