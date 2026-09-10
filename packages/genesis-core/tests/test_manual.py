@@ -16,6 +16,7 @@ class TestManual(unittest.TestCase):
         cfg = cfgmod.GenesisConfig(root=Path("/tmp/h"))
         md = manual.render(cfg, "/bin/genesis")
         for needle in ("Verify before asserting", "Name the form, never the absence",
+                       "not from this surface",
                        "Loaded is not run", "friction", "Think it through first",
                        "(EMPTY: authored by the relationship"):
             self.assertIn(needle, md)
