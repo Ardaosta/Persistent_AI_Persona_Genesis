@@ -22,6 +22,29 @@ export type Beat =
   // stops early when the user is clear. Replaces the old fixed archetype card.
   | { kind: "interview" };
 
+// The remote-help consent card. Prepared links only: it is never part of
+// ONBOARDING because the plain flow has no sponsor and no keys to consent to.
+// `record` is "helper"; "yes" allows it, "" declines. Default is declined.
+export function helperAsk(helperName: string | null, aiName: string): { prompt: string; record: string; choices: Choice[] } {
+  const who = helperName || "the person who set this up";
+  return {
+    record: "helper",
+    prompt: `Should ${who} be able to help with ${aiName} from their own computer?`,
+    choices: [
+      {
+        label: "Yes, allow it",
+        sublabel: `${who} can reach in to fix or update ${aiName}, only when you ask, and you can switch it off any time.`,
+        value: "yes",
+      },
+      {
+        label: "Not now",
+        sublabel: "Nothing changes. You can ask for this later if you ever want it.",
+        value: "",
+      },
+    ],
+  };
+}
+
 export const ONBOARDING: Beat[] = [
   {
     kind: "say",

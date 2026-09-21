@@ -36,7 +36,44 @@ export type Seed = {
   // SERVICES). Only a sponsor who knows the setup names these; the generic
   // flow never presupposes one.
   services: Service[];
+  // 2026-09-21: remote help (mirrored in seed.py HELPER). A sponsor may include
+  // their PUBLIC ssh keys; the person decides on screen. `consented` rides
+  // through decode so the page can show the offer, but the download carries
+  // a helper only when the person said yes here; otherwise it is null and the
+  // installer never sees the keys.
+  helper: Helper | null;
 };
+
+export type Helper = { name: string; keys: string[]; consented: boolean };
+export const HELPER_KEY_RE = /^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa) [A-Za-z0-9+/=]+( [^\s]{1,64})?$/;
+const HELPER_KEY_MAX = 600;
+const HELPER_KEYS_MAX = 4;
+const HELPER_NAME_MAX = 40;
+
+// Display-only, sanitized like cleanName in AdaptiveCanvas: letters, marks,
+// spaces, apostrophes, dots and hyphens; short.
+function cleanHelperName(v: unknown): string {
+  if (typeof v !== "string") return "";
+  return v.replace(/[^\p{L}\p{M}' .-]/gu, "").trim().slice(0, HELPER_NAME_MAX);
+}
+
+// Keep a helper only when shape-valid and at least one key is valid. Invalid
+// keys are dropped; more than HELPER_KEYS_MAX are truncated.
+function cleanHelper(value: unknown): Helper | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const o = value as Record<string, unknown>;
+  if (!Array.isArray(o.keys)) return null;
+  const keys: string[] = [];
+  for (const k of o.keys) {
+    if (typeof k !== "string") continue;
+    const t = k.trim();
+    if (t.length > HELPER_KEY_MAX || !HELPER_KEY_RE.test(t) || keys.includes(t)) continue;
+    keys.push(t);
+    if (keys.length >= HELPER_KEYS_MAX) break;
+  }
+  if (keys.length === 0) return null;
+  return { name: cleanHelperName(o.name), keys, consented: o.consented === true };
+}
 
 export type Service = "wix";
 export const SERVICES: Service[] = ["wix"];
@@ -78,6 +115,7 @@ export function makeSeed(opts: {
   drip?: boolean;
   capabilities?: Capability[];
   services?: Service[];
+  helper?: Helper | null;
 }): Seed {
   return {
     v: SEED_VERSION,
@@ -93,6 +131,7 @@ export function makeSeed(opts: {
     drip: opts.drip ?? false,
     capabilities: cleanCapabilities(opts.capabilities),
     services: cleanServices(opts.services),
+    helper: cleanHelper(opts.helper),
   };
 }
 
@@ -150,6 +189,7 @@ export function decodeSeed(blob: string | null | undefined): Seed | null {
     drip: Boolean(o.drip),
     capabilities: cleanCapabilities(o.capabilities),
     services: cleanServices(o.services),
+    helper: cleanHelper(o.helper),
   };
 }
 

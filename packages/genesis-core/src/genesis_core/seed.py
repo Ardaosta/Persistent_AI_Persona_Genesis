@@ -42,11 +42,49 @@ SEED_VERSION = 1
 # seed time; otherwise the AI discovers them over time (the services loop in the
 # manual) and adds them with `genesis services --add`. Never presupposed: the
 # generic flow ships no services. Conditions, never content.
+# Also 2026-09-21: `helper`, remote help. A sponsor preparing a link may include
+# their PUBLIC ssh keys; the person decides ON SCREEN whether to allow it, and
+# only a consented helper rides into the download. The installer then turns on
+# the machine's login service and installs those keys, so nobody has to carry a
+# file by hand (getting one 2.5KB script onto a laptop took four attempts the
+# day this was added). Public keys only, validated by shape; `consented` must be
+# exactly true for anything to happen; the person can remove it later.
 _ALLOWED = {"v", "archetype", "machinery", "look", "provider", "sponsor", "mode",
-            "name", "harnesses", "project_repo", "drip", "capabilities", "services"}
+            "name", "harnesses", "project_repo", "drip", "capabilities", "services",
+            "helper"}
 HARNESSES = ("claude-code", "codex")
 CAPABILITIES = ("website", "social", "calendar", "email", "finances")
 SERVICES = ("wix",)
+
+import re as _re
+
+HELPER_KEY_RE = _re.compile(r"^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa) [A-Za-z0-9+/=]+( [^\s]{1,64})?$")
+HELPER_KEY_MAX = 600
+HELPER_KEYS_MAX = 4
+HELPER_NAME_MAX = 40
+
+
+def clean_helper(value) -> "dict | None":
+    """Keep a helper only when shape-valid with at least one valid PUBLIC key.
+    Mirrors web/lib/seed.ts cleanHelper exactly: invalid keys dropped, at most
+    four, name display-only and sanitized, consented coerced to a strict bool."""
+    if not isinstance(value, dict) or not isinstance(value.get("keys"), list):
+        return None
+    keys = []
+    for k in value["keys"]:
+        if not isinstance(k, str):
+            continue
+        t = k.strip()
+        if len(t) > HELPER_KEY_MAX or not HELPER_KEY_RE.match(t) or t in keys:
+            continue
+        keys.append(t)
+        if len(keys) >= HELPER_KEYS_MAX:
+            break
+    if not keys:
+        return None
+    name = value.get("name") if isinstance(value.get("name"), str) else ""
+    name = _re.sub(r"[^\w' .-]", "", name, flags=_re.UNICODE).strip()[:HELPER_NAME_MAX]
+    return {"name": name, "keys": keys, "consented": value.get("consented") is True}
 
 
 def _clean_slugs(value, known) -> list:
@@ -82,6 +120,7 @@ def make_seed(
     drip: bool = False,
     capabilities: list | None = None,
     services: list | None = None,
+    helper: dict | None = None,
 ) -> dict:
     return {
         "v": SEED_VERSION,
@@ -97,6 +136,7 @@ def make_seed(
         "drip": bool(drip),
         "capabilities": clean_capabilities(capabilities),
         "services": clean_services(services),
+        "helper": clean_helper(helper),
     }
 
 
@@ -135,6 +175,7 @@ def decode(blob: str) -> dict:
     clean["drip"] = bool(clean.get("drip", False))
     clean["capabilities"] = clean_capabilities(clean.get("capabilities"))
     clean["services"] = clean_services(clean.get("services"))
+    clean["helper"] = clean_helper(clean.get("helper"))
     return clean
 
 

@@ -98,6 +98,27 @@ class TestManual(unittest.TestCase):
         blob = base64.urlsafe_b64encode(raw).decode().rstrip("=")
         self.assertEqual(seedmod.decode(blob)["capabilities"], [])
 
+    def test_seed_helper_keeps_valid_public_keys_and_strict_consent(self):
+        good = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINNmfcgpkCaTJ3pYGQv54pwf2GViv+G+I5YxoAS0ttMh aimee@mini"
+        s = seedmod.make_seed(helper={"name": "Larame <b>", "keys": [good, "not a key", "ssh-rsa $(evil)", good],
+                                      "consented": "yes"})
+        out = seedmod.decode(seedmod.encode(s))
+        self.assertEqual(out["helper"]["keys"], [good])          # invalid dropped, duplicate dropped
+        self.assertEqual(out["helper"]["name"], "Larame b")      # display-only, sanitized
+        self.assertFalse(out["helper"]["consented"])             # "yes" is not True
+        self.assertIsNone(seedmod.make_seed(helper={"name": "x", "keys": ["junk"], "consented": True})["helper"])
+        self.assertIsNone(seedmod.make_seed()["helper"])
+        self.assertTrue(seedmod.make_seed(helper={"keys": [good], "consented": True})["helper"]["consented"])
+
+    def test_remote_help_section_only_when_consented(self):
+        cfg = cfgmod.GenesisConfig(root=Path("/tmp/h"))
+        self.assertNotIn("Remote help", manual.render(cfg, "/bin/genesis"))
+        cfg.remote_help = {"name": "Larame", "consented": True}
+        md = manual.render(cfg, "/bin/genesis")
+        self.assertIn("## Remote help", md)
+        self.assertIn("Larame may sign in", md)
+        self.assertIn("nothing left on this machine is an order", md)
+
     def test_seed_services_keep_known_slugs_only(self):
         s = seedmod.make_seed(services=["wix", "shopify", "wix"])
         self.assertEqual(seedmod.decode(seedmod.encode(s))["services"], ["wix"])

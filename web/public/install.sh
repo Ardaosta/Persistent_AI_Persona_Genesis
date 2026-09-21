@@ -1,10 +1,10 @@
 #!/bin/sh
-# Genesis installer — macOS / Linux.
+# Genesis installer for macOS and Linux.
 #
 # Pull-not-push (SOVEREIGNTY.md): you ran this command yourself; it sets up your
 # AI on your own machine. The web never touched your computer. The onboarding
 # seed (how you want it tuned) rides in the GENESIS_SEED env var that the install
-# command set — nothing is fetched from any server but the code itself.
+# command set; nothing is fetched from any server but the code itself.
 #
 # Usage (the web hands you this, with the seed filled in):
 #   GENESIS_SEED='<blob>' sh -c "$(curl -fsSL https://<host>/install.sh)"
@@ -19,7 +19,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 say "Genesis: setting up your AI's home…"
 
-# 1. prerequisites — both are human-installable, so we explain rather than guess.
+# 1. prerequisites: both are human-installable, so we explain rather than guess.
 if ! have python3; then
   say "Python 3 is required. Install it from https://www.python.org/downloads/ and run this again."
   exit 1
@@ -67,6 +67,11 @@ chmod +x "$BIN_DIR/genesis"
 # Claude-subscription path also wires Claude Code (Mode B) here.
 say "Standing up your AI's home (tuned to your setup answers)..."
 "$VPY" -m genesis_core.cli init
+
+# Remote help, only if the person said yes on the web page (init parked the
+# sponsor's public keys). On a Mac this asks for the password once. Exit 2
+# means "not consented", which is the common case and nothing to report.
+"$VPY" -m genesis_core.cli remote-help enable 2>&1 | grep -v "not consented" || true
 
 MODE="$("$VPY" -m genesis_core.cli seed-mode 2>/dev/null | tr -d '[:space:]')"
 

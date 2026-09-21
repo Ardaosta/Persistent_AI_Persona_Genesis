@@ -65,6 +65,18 @@ export default function TakeItHome({
   const codex = seed.harnesses.includes("codex");
   const aiName = seed.name || "your AI";
   const helper = from || "the person who sent you this";
+  // Remote help reaches the download only as a consented choice, so its
+  // presence here means the person said yes on the summary. Tell them the one
+  // extra permission prompt to expect, and why it is there.
+  const remote = seed.helper?.consented ? seed.helper : null;
+  const remoteName = remote ? remote.name || from || "the person who set this up" : null;
+  const remoteLine = remoteName
+    ? os === "windows"
+      ? ` It will also ask Windows for permission to let ${remoteName} help remotely, because you said yes to that; choose Yes.`
+      : os === "mac"
+        ? ` It will also ask for your password once so ${remoteName} can help remotely, because you said yes to that; that is expected.`
+        : ` It may also ask for your password once so ${remoteName} can help remotely, because you said yes to that; that is expected.`
+    : "";
 
   const osLabel: Record<OS, string> = { windows: "Windows", mac: "a Mac", linux: "Linux" };
   const others = (["windows", "mac", "linux"] as OS[]).filter((o) => o !== os);
@@ -116,7 +128,7 @@ export default function TakeItHome({
           <span className="step-text">
             A window opens and does the work for you. It may ask you to allow a
             change or two along the way. Say yes. It can take a few minutes, and
-            it will tell you what it is doing as it goes.
+            it will tell you what it is doing as it goes.{remoteLine}
           </span>
         </li>
         <li>

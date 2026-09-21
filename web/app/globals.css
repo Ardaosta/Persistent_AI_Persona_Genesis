@@ -340,6 +340,21 @@ a:focus-visible {
 
 .prepared-list li::marker { color: var(--cv-accent); }
 
+/* The remote-help item's current answer: quiet until allowed. */
+.prepared-state {
+  display: block;
+  margin-top: 6px;
+  font-size: calc(15px * var(--cv-scale));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.prepared-state.on {
+  color: var(--cv-accent);
+  opacity: 1;
+}
+
 .change {
   grid-area: change;
   align-self: start;
