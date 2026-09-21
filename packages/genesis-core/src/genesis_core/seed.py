@@ -36,21 +36,36 @@ SEED_VERSION = 1
 # content-free recipe copied into the vault at init; the manual lists them. A
 # slug not in CAPABILITIES is dropped, so a seed can never point at a file it
 # did not ship. Conditions, never content.
+# Also 2026-09-21: `services`, the named online services the person ALREADY uses
+# and wants help managing (wix, ...). A capability is a kind of work; a service
+# is a specific account. A sponsor who knows the person's setup may name them at
+# seed time; otherwise the AI discovers them over time (the services loop in the
+# manual) and adds them with `genesis services --add`. Never presupposed: the
+# generic flow ships no services. Conditions, never content.
 _ALLOWED = {"v", "archetype", "machinery", "look", "provider", "sponsor", "mode",
-            "name", "harnesses", "project_repo", "drip", "capabilities"}
+            "name", "harnesses", "project_repo", "drip", "capabilities", "services"}
 HARNESSES = ("claude-code", "codex")
 CAPABILITIES = ("website", "social", "calendar", "email", "finances")
+SERVICES = ("wix",)
 
 
-def clean_capabilities(value) -> list:
+def _clean_slugs(value, known) -> list:
     """Keep known slugs, in the order given, without duplicates."""
     if not isinstance(value, (list, tuple)):
         return []
     out = []
     for x in value:
-        if isinstance(x, str) and x in CAPABILITIES and x not in out:
+        if isinstance(x, str) and x in known and x not in out:
             out.append(x)
     return out
+
+
+def clean_capabilities(value) -> list:
+    return _clean_slugs(value, CAPABILITIES)
+
+
+def clean_services(value) -> list:
+    return _clean_slugs(value, SERVICES)
 
 
 def make_seed(
@@ -66,6 +81,7 @@ def make_seed(
     project_repo: str | None = None,
     drip: bool = False,
     capabilities: list | None = None,
+    services: list | None = None,
 ) -> dict:
     return {
         "v": SEED_VERSION,
@@ -80,6 +96,7 @@ def make_seed(
         "project_repo": (project_repo or "").strip()[:300] or None,
         "drip": bool(drip),
         "capabilities": clean_capabilities(capabilities),
+        "services": clean_services(services),
     }
 
 
@@ -117,6 +134,7 @@ def decode(blob: str) -> dict:
     clean["project_repo"] = str(clean["project_repo"]).strip()[:300] if clean.get("project_repo") else None
     clean["drip"] = bool(clean.get("drip", False))
     clean["capabilities"] = clean_capabilities(clean.get("capabilities"))
+    clean["services"] = clean_services(clean.get("services"))
     return clean
 
 

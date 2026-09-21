@@ -132,8 +132,14 @@ class TestWire(unittest.TestCase):
         cmds = [h["command"] for e in s["hooks"]["SessionStart"] for h in e["hooks"]]
         self.assertTrue(any("boot-context" in c for c in cmds))
 
-    def test_website_capability_prewires_wix_mcp_without_secrets(self):
+    def test_website_capability_alone_presupposes_no_service(self):
         self.cfg.capabilities = ["website"]
+        out = claude_wire.wire(self.cfg, "/bin/genesis", scope="project")
+        self.assertIsNone(out["mcp"])
+
+    def test_wix_service_prewires_its_mcp_without_secrets(self):
+        self.cfg.capabilities = ["website"]
+        self.cfg.services = ["wix"]
         home = Path(self._td.name) / "My AI"
         # a server the person already had must survive
         home.mkdir()
