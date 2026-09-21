@@ -875,14 +875,29 @@ def cmd_heartbeat(args) -> int:
     # Outward learning, once/day: prefer Sylph (real web research via claude-on-sub);
     # fall back to the old model-knowledge `learn` only if the claude CLI is absent.
     if not learned_today(cfg.root):
+        # Imported OUTSIDE the try: if the import itself failed, the clause
+        # `except sylph.SylphError` would raise NameError while handling it.
+        from . import sylph
+        produced = False
         try:
-            from . import sylph
             out = sylph.run_cycle(cfg)
             if out:
                 print(f"[sylph] {out['topic']} -> {out['path']}", file=sys.stderr)
+                produced = True
         except sylph.SylphError:
-            cmd_learn(_ap.Namespace())
-        mark_learned(cfg.root)
+            produced = cmd_learn(_ap.Namespace()) == 0
+        # The watermark advances only on work that LANDED, never on a run that
+        # merely happened. run_cycle returning None means it did nothing, and
+        # the old code read that as success: on one installed AI the marker
+        # moved every day for 54 days while no finding reached the vault, and
+        # the SylphError fallback never fired either, because a silent None is
+        # not an exception. (Ported 2026-09-21 from a hand-patch that had lived
+        # only on that machine since 2026-08-18.)
+        if produced:
+            mark_learned(cfg.root)
+        else:
+            print("[heartbeat] the outward loop produced nothing, so today is NOT "
+                  "marked as learned and the next wake will retry", file=sys.stderr)
     # Perishable working-state: overwritten freely every wake, never durable.
     from datetime import datetime as _dt
     from genesis_memory import Perishable
