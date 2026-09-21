@@ -22,7 +22,7 @@ This recipe presupposes nothing about where the site lives. Connecting to the
 actual builder (Wix, Squarespace, WordPress, Shopify, GoDaddy, or something
 else) is a service, and services have their own walkthroughs under
 `reference/services/`: a verified one where we have one (Wix today), and the
-generic `services/connecting.md` for the rest. Preference order is always the same: an
+generic `reference/services/connecting.md` for the rest. Preference order is always the same: an
 official hosted connector with a browser sign-in, then the harness's browser
 tool with the person signed in, then, last and only if they set it up
 themselves, an API key. Verify a platform's connector against its own current
