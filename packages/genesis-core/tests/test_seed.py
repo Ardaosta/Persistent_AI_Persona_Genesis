@@ -168,6 +168,7 @@ class TestSeededInit(unittest.TestCase):
                        "scope": "narrow", "modality": "text"},
             provider="anthropic", mode="claude-code",
             capabilities=["website", "finances", "bogus"],
+            services=["wix"],
         ))
         real_load = cfgmod.load
         with mock.patch.object(cfgmod, "load", lambda *a, **k: real_load(self.root)), \
@@ -184,6 +185,15 @@ class TestSeededInit(unittest.TestCase):
         md = (self.root / "My AI" / "CLAUDE.md").read_text(encoding="utf-8")
         self.assertIn("## What you help with", md)
         self.assertIn("capabilities/website.md", md)
+        # the services loop: ledger always, a walkthrough for the named service,
+        # and the service's MCP server pre-wired into the home
+        svc = self.root / "vault" / "reference" / "services"
+        self.assertTrue((svc / "ledger.md").is_file())
+        self.assertTrue((svc / "connecting.md").is_file())
+        self.assertTrue((svc / "wix.md").is_file())
+        self.assertIn("services/wix.md", md)
+        mcp = json.loads((self.root / "My AI" / ".mcp.json").read_text(encoding="utf-8"))
+        self.assertEqual(mcp["mcpServers"]["wix"]["url"], "https://mcp.wix.com/mcp")
         self.assertEqual(real_load(self.root).capabilities, ["website", "finances"])
         # the AI annotates its copy; a re-run must not clobber it
         (caps / "website.md").write_text("annotated by the AI\n", encoding="utf-8")

@@ -32,7 +32,25 @@ export type Seed = {
   drip: boolean;
   // 2026-09-21: what it helps with (mirrored in seed.py). Conditions, never content.
   capabilities: Capability[];
+  // Named online services the person already uses (mirrored in seed.py
+  // SERVICES). Only a sponsor who knows the setup names these; the generic
+  // flow never presupposes one.
+  services: Service[];
 };
+
+export type Service = "wix";
+export const SERVICES: Service[] = ["wix"];
+
+function cleanServices(value: unknown): Service[] {
+  const out: Service[] = [];
+  if (!Array.isArray(value)) return out;
+  for (const x of value) {
+    if (typeof x === "string" && (SERVICES as string[]).includes(x) && !out.includes(x as Service)) {
+      out.push(x as Service);
+    }
+  }
+  return out;
+}
 
 export const SEED_VERSION = 1;
 
@@ -59,6 +77,7 @@ export function makeSeed(opts: {
   project_repo?: string | null;
   drip?: boolean;
   capabilities?: Capability[];
+  services?: Service[];
 }): Seed {
   return {
     v: SEED_VERSION,
@@ -73,6 +92,7 @@ export function makeSeed(opts: {
     project_repo: (opts.project_repo ?? "").trim().slice(0, 300) || null,
     drip: opts.drip ?? false,
     capabilities: cleanCapabilities(opts.capabilities),
+    services: cleanServices(opts.services),
   };
 }
 
@@ -129,6 +149,7 @@ export function decodeSeed(blob: string | null | undefined): Seed | null {
     project_repo: cleanString(o.project_repo, 300),
     drip: Boolean(o.drip),
     capabilities: cleanCapabilities(o.capabilities),
+    services: cleanServices(o.services),
   };
 }
 

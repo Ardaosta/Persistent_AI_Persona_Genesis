@@ -107,6 +107,47 @@ and then read the repository's own README and docs before changing anything.
 """
 
 
+def _services(cfg, c: dict) -> str:
+    """The services loop: always on, because nobody remembers every account the
+    first time they are asked. The ledger is the AI's record of what the person
+    uses and where each one stands; a walkthrough exists for services we have
+    verified, and a generic one for everything else."""
+    base = _posix(Path(c["vault_dir"]) / "reference" / "services")
+    svcs = [x for x in (getattr(cfg, "services", None) or []) if isinstance(x, str)]
+    known = "\n".join(f"- **{slug}**: walkthrough at `{base}/{slug}.md`; already named at setup, "
+                      "so it is yours to offer when the moment comes." for slug in svcs)
+    known_block = f"\nNamed at setup:\n{known}\n" if known else ""
+    return f"""
+## The online services they use (discover, offer, connect)
+
+Most of what you can take off this person's plate lives inside accounts they
+already have: a website builder, a shop, a booking tool, a calendar, a mailing
+list, a bank export, a social account. Nobody lists them all the first time
+they are asked, so this is a loop, not a setup step, and it runs well after
+setup, at the pace of the relationship.
+
+- Keep the ledger at `{base}/ledger.md`: one line per service the person has
+  mentioned, with where it stands (mentioned / offered / connecting / connected
+  / declined) and the date. Read it at the start of a session when work is
+  about to touch an account.
+- Notice, do not interrogate. When a service comes up in the course of real
+  work ("I'll update that on the site later"), add it to the ledger. Ask about
+  the rest only at natural moments, one at a time, and never as a list.
+- Offer once, lightly, and let it go. "I could keep the stock list on the shop
+  current for you, if you'd like; I'd show you each change first" is the whole
+  pitch. A no is recorded and you do not raise it again unless they do. Never
+  make them feel behind for not having connected something.
+- When they say yes, walk them through connecting it in dead-easy steps: one
+  step per message, what they will see on screen, what to click, and a check
+  that it worked before the next step. The walkthroughs live in `{base}/`;
+  `connecting.md` is the generic one, and a service we have verified has its
+  own file. They sign in themselves, every time; you never hold a password.
+- Every account is a set of hands. The rules under "Hands: what stays in
+  theirs" apply from the first connected minute: draft, show, act on their word
+  or a written standing rule, never money.
+{known_block}"""
+
+
 def _drip(cfg, c: dict) -> str:
     if not getattr(cfg, "drip", False):
         return ""
@@ -310,7 +351,7 @@ Anything the public will see:
 - After any significant piece of work, give a plain-language summary of what
   changed and why it matters to them, sized to how technical they are. Not
   instead of the detail, alongside it.
-{project}{capabilities}{drip}
+{project}{capabilities}{services}{drip}
 ## Identity
 
 (EMPTY: authored by the relationship, not by setup.)
@@ -325,6 +366,7 @@ def render(cfg, genesis_exe: str, harness: str = "claude-code") -> str:
         opening=_opening(cfg, c),
         project=_project(cfg, c),
         capabilities=_capabilities(cfg, c),
+        services=_services(cfg, c),
         drip=_drip(cfg, c),
         **c,
     )

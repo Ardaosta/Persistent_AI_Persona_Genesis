@@ -149,26 +149,28 @@ def wire(cfg, genesis_exe: str, *, scope: str = "project", home_dir: Path | None
     }
 
 
-# Remote MCP servers a capability can pre-wire into the companion home's
+# Remote MCP servers a named SERVICE brings into the companion home's
 # project-scoped `.mcp.json` (verified 2026-09-21 against code.claude.com/docs/en/mcp:
 # project scope + native `type: http`, no Node needed; Claude Code asks the person
 # to approve project servers on first use, which is the consent step we want).
-# Only hosted servers with a browser sign-in belong here: no keys, no headers, so
-# nothing secret is ever written to disk by this function.
-CAPABILITY_MCP = {
-    "website": {
+# Keyed by service, never by capability: "website" presupposes nothing about
+# which website builder a person uses. Only hosted servers with a browser
+# sign-in belong here: no keys, no headers, so nothing secret is ever written
+# to disk by this function.
+SERVICE_MCP = {
+    "wix": {
         "wix": {"type": "http", "url": "https://mcp.wix.com/mcp"},
     },
 }
 
 
 def write_capability_mcp(cfg, home: Path) -> "Path | None":
-    """Merge the MCP servers implied by the configured capabilities into
+    """Merge the MCP servers implied by the configured services into
     `<home>/.mcp.json`, idempotently, preserving any other servers the person or
     the AI added. Returns the path when something was written, else None."""
     wanted: dict = {}
-    for slug in (getattr(cfg, "capabilities", None) or []):
-        wanted.update(CAPABILITY_MCP.get(slug, {}))
+    for slug in (getattr(cfg, "services", None) or []):
+        wanted.update(SERVICE_MCP.get(slug, {}))
     if not wanted:
         return None
     path = Path(home) / ".mcp.json"

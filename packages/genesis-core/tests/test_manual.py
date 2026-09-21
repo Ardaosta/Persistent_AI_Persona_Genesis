@@ -44,6 +44,26 @@ class TestManual(unittest.TestCase):
         # the same text on both doors: the section is not harness-specific
         self.assertEqual(md, manual.render(cfg, "/bin/genesis", harness="codex"))
 
+    def test_services_loop_is_always_on_and_presupposes_nothing(self):
+        cfg = cfgmod.GenesisConfig(root=Path("/tmp/h"))
+        md = manual.render(cfg, "/bin/genesis")
+        self.assertIn("## The online services they use", md)
+        self.assertIn("reference/services/ledger.md", md)
+        self.assertIn("Offer once, lightly", md)
+        self.assertNotIn("Named at setup", md)
+        self.assertNotIn("wix", md.lower())
+        cfg.services = ["wix"]
+        md = manual.render(cfg, "/bin/genesis")
+        self.assertIn("Named at setup", md)
+        self.assertIn("reference/services/wix.md", md)
+
+    def test_every_known_service_ships_a_walkthrough(self):
+        from genesis_core.seed import SERVICES
+        res = Path(manual.__file__).with_name("resources") / "services"
+        for name in ("ledger.md", "connecting.md", *(f"{s}.md" for s in SERVICES)):
+            self.assertTrue((res / name).is_file(), name)
+        self.assertEqual(emptiness.scan(res), [])
+
     def test_every_known_capability_ships_a_recipe(self):
         from genesis_core.seed import CAPABILITIES
         res = Path(manual.__file__).with_name("resources") / "capabilities"
@@ -74,6 +94,11 @@ class TestManual(unittest.TestCase):
         raw = json.dumps({"v": 1, "capabilities": "website"}).encode()
         blob = base64.urlsafe_b64encode(raw).decode().rstrip("=")
         self.assertEqual(seedmod.decode(blob)["capabilities"], [])
+
+    def test_seed_services_keep_known_slugs_only(self):
+        s = seedmod.make_seed(services=["wix", "shopify", "wix"])
+        self.assertEqual(seedmod.decode(seedmod.encode(s))["services"], ["wix"])
+        self.assertEqual(seedmod.make_seed()["services"], [])
 
     def test_config_roundtrip_of_capabilities(self):
         with tempfile.TemporaryDirectory() as td:

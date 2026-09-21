@@ -16,53 +16,23 @@ will see" in your manual apply to all of it.
    stock counts yourself"). Write it in this file, dated, in their words. Until
    a rule is written here, every change is draft, show, publish on their word.
 
-## Wix (verified 2026-09-21 against dev.wix.com)
+## Which platform
 
-Wix runs an official, hosted MCP server, so an agentic harness can read and
-change the site directly, with the person signing in through the browser and
-you never holding a password.
+This recipe presupposes nothing about where the site lives. Connecting to the
+actual builder (Wix, Squarespace, WordPress, Shopify, GoDaddy, or something
+else) is a service, and services have their own walkthroughs under
+`reference/services/`: a verified one where we have one (Wix today), and the
+generic `services/connecting.md` for the rest. Preference order is always the same: an
+official hosted connector with a browser sign-in, then the harness's browser
+tool with the person signed in, then, last and only if they set it up
+themselves, an API key. Verify a platform's connector against its own current
+documentation before recommending it; never from memory.
 
-If this home was set up with the website capability, Claude Code already has
-the server: `<home>/.mcp.json` names `wix` as a remote HTTP server
-(`https://mcp.wix.com/mcp`), no Node.js needed. Claude Code asks the person to
-approve project servers the first time; that is the consent step, let them read
-it. If it is missing, add it to `<home>/.mcp.json` yourself:
-
-```json
-{ "mcpServers": { "wix": { "type": "http", "url": "https://mcp.wix.com/mcp" } } }
-```
-
-For a harness without remote MCP (needs Node.js 19.9 or newer):
-
-```json
-{ "mcpServers": { "wix-mcp-remote": { "command": "npx", "args": ["-y", "@wix/mcp-remote@latest", "https://mcp.wix.com/mcp"] } } }
-```
-
-The first call opens a Wix sign-in in the browser; the person signs in as the
-site owner. Tools you then have (names as Wix ships them): `ListWixSites`,
-`GetSiteContext`, `CallWixSiteAPI` and `ExecuteWixAPI` for site data (Stores
-catalog and inventory, Bookings, CMS, events), `ManageWixSite` for publishing,
-`UploadImageToWixSite`, and the documentation search tools. Call `WixREADME`
-first for any task; it routes you to the right recipe. If the connection dies
-after a long idle or an account switch, delete `~/.mcp-auth` (Windows:
-`C:\Users\<name>\.mcp-auth`) and sign in again.
-
-Wix API keys (the header-authenticated form) exist for automation tools. Do not
-use one unless the person has set one up themselves; it is a credential, and
-the browser sign-in makes it unnecessary here.
-
-Typical first-week jobs on Wix: mark products in or out of stock (Stores
-inventory), add or edit a product (draft it, show it, publish on their word),
-update opening hours or a page's text, check what a Bookings service currently
-offers. "Update stock counts" is the canonical candidate for a standing rule;
-"change a price" never is.
-
-## Other platforms
-
-Squarespace, WordPress, Shopify, GoDaddy and the rest: use the harness's browser
-tool with the person signed in, and do the change where they can see it. If a
-platform ships an official MCP server or CLI, verify it against the platform's
-own current documentation before recommending it; do not guess from memory.
+Typical first-week jobs once connected: mark products in or out of stock, add
+or edit a product (draft it, show it, publish on their word), update opening
+hours or a page's text, check what the booking page currently offers. "Update
+stock counts" is the canonical candidate for a standing rule; "change a price"
+never is.
 
 ## Always
 

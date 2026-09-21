@@ -977,6 +977,8 @@ def _apply_seed(cfg, seed: dict) -> None:
         data["harnesses"] = list(seed["harnesses"])
     if seed.get("capabilities"):
         data["capabilities"] = list(seed["capabilities"])
+    if seed.get("services"):
+        data["services"] = list(seed["services"])
     cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
     cfg.config_path.write_text(_json.dumps(data, indent=2), encoding="utf-8")
 
@@ -1043,6 +1045,10 @@ def cmd_init(args) -> int:
     if cfg.capabilities:
         for p in _ensure_capability_entries(cfg):
             print(f"capability ready: {p.stem}", file=sys.stderr)
+    # The services loop always gets its ledger; named services get a walkthrough.
+    for p in _ensure_services(cfg):
+        if p.stem not in ("ledger", "connecting"):
+            print(f"service walkthrough ready: {p.stem}", file=sys.stderr)
 
     # Mode B: an agentic harness is the brain (authed by the user's own subscription),
     # so there's no API key to fetch. Wire each requested door and point them at it.
@@ -1162,6 +1168,61 @@ def _ensure_capability_entries(cfg) -> list:
         if dst.exists():
             out.append(dst)
     return out
+
+
+def _ensure_services(cfg) -> list:
+    """The services loop's files, copied once and never overwritten: the ledger
+    the AI keeps of what the person uses (always), and a walkthrough for each
+    configured service. The manual points at these paths; `genesis verify`
+    catches a pointer with no file."""
+    from .seed import clean_services
+    src_dir = _P(__file__).with_name("resources") / "services"
+    dst_dir = cfg.vault_dir / "reference" / "services"
+    out = []
+    pairs = [("ledger.md", dst_dir / "ledger.md"), ("connecting.md", dst_dir / "connecting.md")]
+    pairs += [(f"{slug}.md", dst_dir / f"{slug}.md") for slug in clean_services(cfg.services)]
+    for name, dst in pairs:
+        src = src_dir / name
+        if not dst.exists() and src.is_file():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        if dst.exists():
+            out.append(dst)
+    return out
+
+
+def cmd_services(args) -> int:
+    """List, add, or remove the online services this AI helps manage, copy the
+    walkthrough for each, and re-render every wired door (a service can bring an
+    MCP server with it, so the doors must be re-wired, not just the manual)."""
+    from .seed import SERVICES, clean_services
+    cfg = cfgmod.load()
+    current = clean_services(cfg.services)
+    changed = False
+    for slug in (getattr(args, "add", None) or []):
+        if slug not in SERVICES:
+            print(f"no walkthrough for '{slug}' yet. Known: {', '.join(SERVICES)}. "
+                  "Use the generic one at reference/services/connecting.md and note it in the ledger.",
+                  file=sys.stderr)
+            return 2
+        if slug not in current:
+            current.append(slug)
+            changed = True
+    for slug in (getattr(args, "remove", None) or []):
+        if slug in current:
+            current.remove(slug)
+            changed = True
+    if changed:
+        cfgmod.update_fields(cfg, services=current or None)
+        cfg = cfgmod.load()
+        _ensure_services(cfg)
+        _rerender_doors(cfg)
+    if current:
+        for slug in current:
+            print(f"  {slug}: {cfg.vault_dir / 'reference' / 'services' / (slug + '.md')}")
+    else:
+        print("no services configured. Known walkthroughs: " + ", ".join(SERVICES))
+    return 0
 
 
 def cmd_capabilities(args) -> int:
@@ -1648,6 +1709,10 @@ def main(argv=None) -> int:
     cap_p.add_argument("--add", action="append", metavar="SLUG", help="add a capability (repeatable)")
     cap_p.add_argument("--remove", action="append", metavar="SLUG", help="remove a capability (repeatable)")
     cap_p.set_defaults(func=cmd_capabilities)
+    svc_p = sub.add_parser("services", help="list, add, or remove the online services this AI helps manage (wix, ...)")
+    svc_p.add_argument("--add", action="append", metavar="SLUG", help="add a service (repeatable)")
+    svc_p.add_argument("--remove", action="append", metavar="SLUG", help="remove a service (repeatable)")
+    svc_p.set_defaults(func=cmd_services)
     wire_p = sub.add_parser(
         "wire-claude",
         help="Mode B: wire Claude Code to run as a Genesis frontend (CLAUDE.md + boot hook)",

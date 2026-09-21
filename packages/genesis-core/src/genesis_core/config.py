@@ -316,6 +316,9 @@ class GenesisConfig:
     # calendar, email, finances). Pointers at content-free recipes in the vault;
     # the manual lists them. Still a condition, never a self.
     capabilities: list = None
+    # Named online services the person uses and wants managed (wix, ...). Set by
+    # a sponsor at seed time or discovered by the AI later; never presupposed.
+    services: list = None
 
     def __post_init__(self):
         if self.allowed_email_recipients is None:
@@ -326,6 +329,8 @@ class GenesisConfig:
             self.harnesses = []
         if self.capabilities is None:
             self.capabilities = []
+        if self.services is None:
+            self.services = []
 
     @property
     def engine_trains(self) -> bool:
@@ -437,6 +442,7 @@ def load(root: Path | None = None, *, creating: bool = False) -> GenesisConfig:
         drip=bool(data.get("drip", False)),
         harnesses=[h for h in (data.get("harnesses") or []) if isinstance(h, str)],
         capabilities=[c for c in (data.get("capabilities") or []) if isinstance(c, str)],
+        services=[s for s in (data.get("services") or []) if isinstance(s, str)],
     )
 
 
