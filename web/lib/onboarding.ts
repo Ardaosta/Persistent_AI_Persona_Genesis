@@ -60,7 +60,7 @@ export const ONBOARDING: Beat[] = [
   {
     kind: "say",
     // The card below themes the SCREEN's look only. We do NOT pre-seed how the AI
-    // speaks — its voice is un-authored and grows through the relationship (the
+    // speaks ,  its voice is un-authored and grows through the relationship (the
     // spine's invariants 1 & 2; flagged in review, issue #1). So this asks about the
     // interface's feel, and the recorded value is a visual theme, not a register.
     lines: ["Good. And the feel of it on screen, while we're here."],
@@ -225,8 +225,8 @@ export const ONBOARDING: Beat[] = [
   {
     kind: "say",
     lines: [
-      "Perfect. Everything you just shaped is ready to live on your own machine.",
-      "Take it home with the command below, and your AI sets itself up there, tuned to all of this.",
+      "Perfect. Everything you just shaped is ready to live on your own computer.",
+      "One download, and your AI sets itself up there, tuned to all of this.",
     ],
   },
 ];

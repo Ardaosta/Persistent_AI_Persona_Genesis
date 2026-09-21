@@ -1,4 +1,4 @@
-// The onboarding seed — browser half of the web→local handoff. Mirrors
+// The onboarding seed, browser half of the web-to-local handoff. Mirrors
 // genesis_core/seed.py: a base64url (no padding) blob of the seed JSON that
 // `genesis init --seed` decodes on the user's machine. Only conditions ride in
 // it (archetype + machinery + look), never personality content.
@@ -7,6 +7,7 @@
 // web never executes anything on their box and never phones home for the seed.
 
 export type Harness = "claude-code" | "codex";
+export const HARNESSES: Harness[] = ["claude-code", "codex"];
 // Mirrors seed.py CAPABILITIES: the domains the person asked for help with.
 // Pointers at content-free recipes copied into the vault at init; unknown
 // slugs are dropped on decode, so this list and seed.py must agree.
@@ -35,6 +36,17 @@ export type Seed = {
 
 export const SEED_VERSION = 1;
 
+function cleanCapabilities(value: unknown): Capability[] {
+  const out: Capability[] = [];
+  if (!Array.isArray(value)) return out;
+  for (const x of value) {
+    if (typeof x === "string" && (CAPABILITIES as string[]).includes(x) && !out.includes(x as Capability)) {
+      out.push(x as Capability);
+    }
+  }
+  return out;
+}
+
 export function makeSeed(opts: {
   archetype?: Record<string, unknown>;
   machinery?: Record<string, unknown>;
@@ -48,10 +60,6 @@ export function makeSeed(opts: {
   drip?: boolean;
   capabilities?: Capability[];
 }): Seed {
-  const caps: Capability[] = [];
-  for (const c of opts.capabilities ?? []) {
-    if (CAPABILITIES.includes(c) && !caps.includes(c)) caps.push(c);
-  }
   return {
     v: SEED_VERSION,
     archetype: opts.archetype ?? {},
@@ -61,20 +69,67 @@ export function makeSeed(opts: {
     sponsor: opts.sponsor ?? null,
     mode: opts.mode ?? null,
     name: (opts.name ?? "").trim().slice(0, 60) || null,
-    harnesses: opts.harnesses ?? [],
+    harnesses: (opts.harnesses ?? []).filter((h) => HARNESSES.includes(h)),
     project_repo: (opts.project_repo ?? "").trim().slice(0, 300) || null,
     drip: opts.drip ?? false,
-    capabilities: caps,
+    capabilities: cleanCapabilities(opts.capabilities),
   };
 }
 
-// UTF-8-safe base64url, no padding — decodes byte-for-byte in seed.py's decode().
+// UTF-8-safe base64url, no padding. Decodes byte-for-byte in seed.py's decode().
 export function encodeSeed(seed: Seed): string {
   const json = JSON.stringify(seed);
   const bytes = new TextEncoder().encode(json);
   let bin = "";
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function cleanString(v: unknown, max: number): string | null {
+  if (typeof v === "string") return v.trim().slice(0, max) || null;
+  if (typeof v === "number" || typeof v === "boolean") return String(v).slice(0, max);
+  return null;
+}
+
+function cleanObject(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
+// The inverse of encodeSeed, mirroring seed.py's decode(): keep only the known
+// keys, coerce every shape, drop unknown capability slugs and harnesses. A
+// malformed blob returns null rather than throwing, so a bad link degrades to
+// the ordinary flow instead of a broken page.
+export function decodeSeed(blob: string | null | undefined): Seed | null {
+  const s = (blob ?? "").trim();
+  if (!s) return null;
+  let data: unknown;
+  try {
+    const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4);
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    data = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const o = data as Record<string, unknown>;
+  return {
+    v: SEED_VERSION,
+    archetype: cleanObject(o.archetype),
+    machinery: cleanObject(o.machinery),
+    look: cleanString(o.look, 200),
+    provider: cleanString(o.provider, 40),
+    sponsor: cleanString(o.sponsor, 200),
+    mode: cleanString(o.mode, 40),
+    name: cleanString(o.name, 60),
+    harnesses: Array.isArray(o.harnesses)
+      ? o.harnesses.filter((h): h is Harness => typeof h === "string" && (HARNESSES as string[]).includes(h))
+      : [],
+    project_repo: cleanString(o.project_repo, 300),
+    drip: Boolean(o.drip),
+    capabilities: cleanCapabilities(o.capabilities),
+  };
 }
 
 export type OS = "mac" | "windows" | "linux";
@@ -91,9 +146,8 @@ function baseUrl(host?: string): string {
   return (host ?? (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/$/, "");
 }
 
-// The exact command the user pastes into their terminal. `host` defaults to the
-// page origin, so install.sh / install.ps1 are served from this same app. This is
-// the "advanced / I like the terminal" path; most people use the download below.
+// The exact command for someone who would rather do it by hand. `host` defaults
+// to the page origin, so install.sh / install.ps1 are served from this same app.
 export function installCommand(seed: Seed, os: OS, host?: string): string {
   const blob = encodeSeed(seed);
   const base = baseUrl(host);
@@ -103,9 +157,17 @@ export function installCommand(seed: Seed, os: OS, host?: string): string {
   return `GENESIS_SEED='${blob}' sh -c "$(curl -fsSL ${base}/install.sh)"`;
 }
 
-// A double-clickable installer file with the seed baked in, so a non-technical
-// person never opens a terminal: download, double-click, watch. Returns the
-// filename + contents + a mime type for the download blob.
+// A friendly file name for the download: "Set up Carson" when the AI has a
+// name, "Set up my AI" otherwise. Characters a file system rejects are dropped.
+export function installFileStem(seed: Seed): string {
+  // eslint-disable-next-line no-control-regex
+  const safe = (seed.name ?? "").replace(/[\\/:*?"<>|\x00-\x1f]/g, "").trim();
+  return safe ? `Set up ${safe}` : "Set up my AI";
+}
+
+// A double-clickable setup file with the seed baked in, so a non-technical
+// person never opens a terminal: download, open, watch. Returns the filename,
+// contents, and a mime type for the download blob.
 export function installFile(
   seed: Seed,
   os: OS,
@@ -113,19 +175,20 @@ export function installFile(
 ): { name: string; content: string; mime: string } {
   const blob = encodeSeed(seed);
   const base = baseUrl(host);
+  const stem = installFileStem(seed);
   if (os === "windows") {
-    // A .bat opens its own console window on double-click. CRLF line endings.
+    // The .bat only sets the seed and hands off to the guided (windowed)
+    // installer. CRLF line endings; no pause, the GUI owns the experience and a
+    // console should not linger behind it.
     const content =
       "@echo off\r\n" +
       "setlocal\r\n" +
       `set "GENESIS_SEED=${blob}"\r\n` +
-      `powershell -ExecutionPolicy Bypass -NoProfile -Command "irm ${base}/install.ps1 | iex"\r\n` +
-      "echo.\r\n" +
-      "pause\r\n";
-    return { name: "Genesis-Setup.bat", content, mime: "application/octet-stream" };
+      `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "irm ${base}/install-gui.ps1 | iex"\r\n`;
+    return { name: `${stem}.bat`, content, mime: "application/octet-stream" };
   }
   // macOS .command double-clicks open in Terminal; Linux gets a plain .sh.
-  const name = os === "mac" ? "Genesis-Setup.command" : "genesis-setup.sh";
+  const name = os === "mac" ? `${stem}.command` : `${stem.toLowerCase().replace(/\s+/g, "-")}.sh`;
   const content =
     "#!/bin/bash\n" +
     `export GENESIS_SEED='${blob}'\n` +

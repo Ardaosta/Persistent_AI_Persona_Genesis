@@ -132,6 +132,27 @@ class TestWire(unittest.TestCase):
         cmds = [h["command"] for e in s["hooks"]["SessionStart"] for h in e["hooks"]]
         self.assertTrue(any("boot-context" in c for c in cmds))
 
+    def test_website_capability_prewires_wix_mcp_without_secrets(self):
+        self.cfg.capabilities = ["website"]
+        home = Path(self._td.name) / "My AI"
+        # a server the person already had must survive
+        home.mkdir()
+        (home / ".mcp.json").write_text(json.dumps({"mcpServers": {"theirs": {"type": "http", "url": "https://x/mcp"}}}))
+        out = claude_wire.wire(self.cfg, "/bin/genesis", scope="project", home_dir=home)
+        self.assertEqual(out["mcp"], home / ".mcp.json")
+        data = json.loads((home / ".mcp.json").read_text())
+        self.assertEqual(data["mcpServers"]["wix"], {"type": "http", "url": "https://mcp.wix.com/mcp"})
+        self.assertIn("theirs", data["mcpServers"])
+        self.assertNotIn("headers", data["mcpServers"]["wix"])  # browser sign-in, never a key on disk
+        # idempotent
+        claude_wire.wire(self.cfg, "/bin/genesis", scope="project", home_dir=home)
+        self.assertEqual(len(json.loads((home / ".mcp.json").read_text())["mcpServers"]), 2)
+
+    def test_no_capabilities_means_no_mcp_file(self):
+        out = claude_wire.wire(self.cfg, "/bin/genesis", scope="project")
+        self.assertIsNone(out["mcp"])
+        self.assertFalse((self.cfg.root / ".mcp.json").exists())
+
     def test_user_scope_targets_home_claude(self):
         with mock.patch.object(claude_wire.Path, "home", return_value=Path(self._td.name) / "fakehome"):
             out = claude_wire.wire(self.cfg, "/bin/genesis", scope="user")

@@ -20,16 +20,19 @@ will see" in your manual apply to all of it.
 
 Wix runs an official, hosted MCP server, so an agentic harness can read and
 change the site directly, with the person signing in through the browser and
-you never holding a password. Needs Node.js 19.9 or newer on the machine
-(Windows: `winget install OpenJS.NodeJS.LTS`; macOS: `brew install node`).
+you never holding a password.
 
-For Claude Code, add to the harness's MCP config (or ask the harness to add it):
+If this home was set up with the website capability, Claude Code already has
+the server: `<home>/.mcp.json` names `wix` as a remote HTTP server
+(`https://mcp.wix.com/mcp`), no Node.js needed. Claude Code asks the person to
+approve project servers the first time; that is the consent step, let them read
+it. If it is missing, add it to `<home>/.mcp.json` yourself:
 
 ```json
-{ "mcpServers": { "wix-mcp-remote": { "type": "http", "url": "https://mcp.wix.com/mcp" } } }
+{ "mcpServers": { "wix": { "type": "http", "url": "https://mcp.wix.com/mcp" } } }
 ```
 
-For a harness without remote MCP:
+For a harness without remote MCP (needs Node.js 19.9 or newer):
 
 ```json
 { "mcpServers": { "wix-mcp-remote": { "command": "npx", "args": ["-y", "@wix/mcp-remote@latest", "https://mcp.wix.com/mcp"] } } }

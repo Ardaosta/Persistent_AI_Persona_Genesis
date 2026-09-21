@@ -1,8 +1,8 @@
-# Genesis installer — Windows (PowerShell).
+# Genesis installer for Windows (PowerShell).
 #
 # Pull-not-push (SOVEREIGNTY.md): you ran this yourself; it sets up your AI on
 # your own machine. The onboarding seed rides in the GENESIS_SEED env var the
-# install command set — nothing is fetched from a server but the code itself.
+# install command set; nothing is fetched from a server but the code itself.
 #
 # Usage (the web hands you this, with the seed filled in):
 #   $env:GENESIS_SEED='<blob>'; irm https://<host>/install.ps1 | iex
@@ -28,10 +28,49 @@ function Find-Python {
   return $null
 }
 
+# Re-read PATH from the registry (HKLM then HKCU) so a program winget just
+# installed is visible to this same session without a restart. Same logic as
+# install-gui.ps1 (the two files are served independently; keep them in step).
+function Update-PathFromRegistry {
+  $parts = @()
+  try {
+    $m = (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" -Name Path -ErrorAction SilentlyContinue).Path
+    if ($m) { $parts += [Environment]::ExpandEnvironmentVariables($m) }
+  } catch { }
+  try {
+    $u = (Get-ItemProperty "HKCU:\Environment" -Name Path -ErrorAction SilentlyContinue).Path
+    if ($u) { $parts += [Environment]::ExpandEnvironmentVariables($u) }
+  } catch { }
+  if ($parts.Count -gt 0) { $env:Path = ($parts -join ";") + ";" + $env:Path }
+}
+
+# winget can install both prerequisites quietly, per user, with no admin prompt.
+# Returns $true when the install command ran and exited 0.
+function Install-WithWinget {
+  param([string]$Id, [string[]]$Extra = @())
+  if (-not (Have "winget")) { return $false }
+  Write-Host "  installing $Id with winget (this can take a few minutes)..."
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  $ok = $false
+  try {
+    & winget install -e --id $Id @Extra --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
+    $ok = ($LASTEXITCODE -eq 0)
+  } catch { $ok = $false }
+  $ErrorActionPreference = $prev
+  Update-PathFromRegistry
+  return $ok
+}
+
 Write-Host "Genesis: setting up your AI's home..."
 
-# 1. prerequisites — both are human-installable; explain rather than guess.
+# 1. prerequisites: try winget first. Both are human-installable, so if that
+# does not work, explain rather than guess.
 $Py = Find-Python
+if (-not $Py) {
+  Write-Host "Python 3 is not installed yet."
+  if (Install-WithWinget "Python.Python.3.12" @("--scope", "user")) { $Py = Find-Python }
+}
 if (-not $Py) {
   Write-Host "Python 3 is required. Install it from https://www.python.org/downloads/"
   Write-Host "  (on the first installer screen, check 'Add python.exe to PATH'), then run this again."
@@ -39,7 +78,15 @@ if (-not $Py) {
   exit 1
 }
 if (-not (Have "git")) {
+  Write-Host "git is not installed yet."
+  if (Install-WithWinget "Git.Git") {
+    # A silent Git install picks Vim as its editor. Nobody should ever land in Vim.
+    if (Have "git") { git config --global core.editor notepad }
+  }
+}
+if (-not (Have "git")) {
   Write-Host "git is required. Install it from https://git-scm.com/download/win and run this again."
+  Write-Host "  Or, if you have winget:  winget install -e --id Git.Git"
   exit 1
 }
 

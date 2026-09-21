@@ -135,10 +135,47 @@ def wire(cfg, genesis_exe: str, *, scope: str = "project", home_dir: Path | None
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
 
+    mcp_path = None
+    if launch_dir is not None:
+        mcp_path = write_capability_mcp(cfg, launch_dir)
+
     return {
         "scope": scope,
         "claude_md": claude_md,
         "settings": settings_path,
         "launch_dir": launch_dir,
         "hook_command": _hook_command(genesis_exe, cfg.root),
+        "mcp": mcp_path,
     }
+
+
+# Remote MCP servers a capability can pre-wire into the companion home's
+# project-scoped `.mcp.json` (verified 2026-09-21 against code.claude.com/docs/en/mcp:
+# project scope + native `type: http`, no Node needed; Claude Code asks the person
+# to approve project servers on first use, which is the consent step we want).
+# Only hosted servers with a browser sign-in belong here: no keys, no headers, so
+# nothing secret is ever written to disk by this function.
+CAPABILITY_MCP = {
+    "website": {
+        "wix": {"type": "http", "url": "https://mcp.wix.com/mcp"},
+    },
+}
+
+
+def write_capability_mcp(cfg, home: Path) -> "Path | None":
+    """Merge the MCP servers implied by the configured capabilities into
+    `<home>/.mcp.json`, idempotently, preserving any other servers the person or
+    the AI added. Returns the path when something was written, else None."""
+    wanted: dict = {}
+    for slug in (getattr(cfg, "capabilities", None) or []):
+        wanted.update(CAPABILITY_MCP.get(slug, {}))
+    if not wanted:
+        return None
+    path = Path(home) / ".mcp.json"
+    data = _read_json(path)
+    servers = dict(data.get("mcpServers") or {})
+    servers.update(wanted)
+    data["mcpServers"] = servers
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return path
