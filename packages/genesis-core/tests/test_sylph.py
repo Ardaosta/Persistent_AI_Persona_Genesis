@@ -187,6 +187,33 @@ class TestSuggestAndHeartbeat(unittest.TestCase):
             cli.cmd_heartbeat(argparse.Namespace())
         rc.assert_called_once()        # Sylph is preferred
         learn.assert_not_called()      # the hollow learn is not used when Sylph works
+        from genesis_core.outward import learned_today
+        self.assertTrue(learned_today(self.cfg.root))  # a finding landed, so today counts
+
+    def test_heartbeat_does_not_mark_learned_when_nothing_landed(self):
+        """run_cycle returning None is 'did nothing', not success. The old code
+        advanced the watermark anyway, and one installed AI logged 54 days of
+        'learned' with no finding in its vault."""
+        from genesis_core import cli
+        from genesis_core import config as cfgmod2
+        from genesis_core.outward import learned_today
+        import argparse
+        real_load = cfgmod2.load
+        with mock.patch.object(cfgmod2, "load", lambda *a, **k: real_load(self.cfg.root)), \
+             mock.patch.object(cli, "cmd_dream"), \
+             mock.patch.object(sylph, "run_cycle", return_value=None) as rc, \
+             mock.patch.object(cli, "cmd_learn") as learn:
+            cli.cmd_heartbeat(argparse.Namespace())
+        rc.assert_called_once()
+        learn.assert_not_called()
+        self.assertFalse(learned_today(self.cfg.root))  # the next wake retries
+        # the fallback path counts only when it succeeds
+        with mock.patch.object(cfgmod2, "load", lambda *a, **k: real_load(self.cfg.root)), \
+             mock.patch.object(cli, "cmd_dream"), \
+             mock.patch.object(sylph, "run_cycle", side_effect=sylph.SylphError("no cli")), \
+             mock.patch.object(cli, "cmd_learn", return_value=1):
+            cli.cmd_heartbeat(argparse.Namespace())
+        self.assertFalse(learned_today(self.cfg.root))
 
 
 if __name__ == "__main__":
