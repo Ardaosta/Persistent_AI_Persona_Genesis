@@ -51,7 +51,10 @@ class TestManual(unittest.TestCase):
         self.assertIn("reference/services/ledger.md", md)
         self.assertIn("Offer once, lightly", md)
         self.assertNotIn("Named at setup", md)
-        self.assertNotIn("wix", md.lower())
+        # the AI is told how to add a service ITSELF, and which ones are verified
+        self.assertIn("services --add <service>", md)
+        self.assertIn("Verified walkthroughs today: wix.", md)
+        self.assertIn("never send them to a", md)
         cfg.services = ["wix"]
         md = manual.render(cfg, "/bin/genesis")
         self.assertIn("Named at setup", md)

@@ -31,6 +31,7 @@ def _cmds(cfg, genesis_exe: str) -> dict:
         "name_cmd": f'"{exe}" name',
         "import_cmd": f'"{exe}" import',
         "capabilities_cmd": f'"{exe}" capabilities',
+        "services_cmd": f'"{exe}" services',
         "vault_dir": str(cfg.vault_dir),
     }
 
@@ -112,7 +113,10 @@ def _services(cfg, c: dict) -> str:
     first time they are asked. The ledger is the AI's record of what the person
     uses and where each one stands; a walkthrough exists for services we have
     verified, and a generic one for everything else."""
+    from .seed import SERVICES
     base = _posix(Path(c["vault_dir"]) / "reference" / "services")
+    known_list = ", ".join(SERVICES)
+    services_cmd = c["services_cmd"]
     svcs = [x for x in (getattr(cfg, "services", None) or []) if isinstance(x, str)]
     known = "\n".join(f"- **{slug}**: walkthrough at `{base}/{slug}.md`; already named at setup, "
                       "so it is yours to offer when the moment comes." for slug in svcs)
@@ -137,11 +141,21 @@ setup, at the pace of the relationship.
   current for you, if you'd like; I'd show you each change first" is the whole
   pitch. A no is recorded and you do not raise it again unless they do. Never
   make them feel behind for not having connected something.
-- When they say yes, walk them through connecting it in dead-easy steps: one
-  step per message, what they will see on screen, what to click, and a check
-  that it worked before the next step. The walkthroughs live in `{base}/`;
-  `connecting.md` is the generic one, and a service we have verified has its
-  own file. They sign in themselves, every time; you never hold a password.
+- When they say yes, make the setup easy yourself; never send them to a
+  terminal. Verified walkthroughs today: {known_list}. For one of those, run
+  this with your shell tool, once:
+      {services_cmd} --add <service>
+  It copies the walkthrough into `{base}/`, re-renders this manual, and wires
+  any connection the service brings (a hosted connector the person signs in
+  to). Then tell them to close and reopen this session so the harness sees the
+  new connection; it will ask them to approve it, and that is their consent
+  step. For any other service, `connecting.md` in the same folder is the
+  generic walkthrough; note the service in the ledger and follow it.
+- Then walk them through it in dead-easy steps: one step per message, what
+  they will see on screen, what to click, and a check that it worked before
+  the next step. They sign in themselves, every time; you never hold a
+  password. If a step needs something only a sponsor can do, say exactly what,
+  and use the help line.
 - Every account is a set of hands. The rules under "Hands: what stays in
   theirs" apply from the first connected minute: draft, show, act on their word
   or a written standing rule, never money.
