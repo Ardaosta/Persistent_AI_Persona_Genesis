@@ -21,12 +21,60 @@ import {
 } from "@/lib/interview";
 import { interpretLook } from "@/lib/looks";
 import { PERSONAS, type Step } from "@/lib/personas";
-import { CAPABILITIES, type Capability, type Harness, makeSeed } from "@/lib/seed";
+import {
+  CAPABILITIES,
+  type Capability,
+  type Harness,
+  type Seed,
+  decodeSeed,
+  makeSeed,
+} from "@/lib/seed";
 import { CAP_LABELS, CapabilityIcon } from "./CapabilityIcon";
 import TakeItHome from "./TakeItHome";
 
 type Line = { text: string; emph?: boolean; key: number };
 type Ask = { prompt: string; record: string; choices: Choice[]; index: number; freeText?: FreeText; interview?: Question };
+
+// A prepared link: someone who cares about this person built the seed for them,
+// so the page opens with a greeting and a plain summary instead of an interview.
+type Prepared = { seed: Seed; to: string | null; from: string | null };
+type PreparedPhase = "opening" | "summary" | "editing" | "home";
+
+// Warm, plain phrases for what the AI will help with (capability slugs).
+const CAP_PHRASES: Record<Capability, string> = {
+  website: "keeping your website current",
+  social: "posts and marketing",
+  calendar: "your calendar and bookings",
+  email: "email",
+  finances: "seeing your finances clearly, later, when you want",
+};
+
+// A first name from a link is displayed, never trusted: strip anything that is
+// not letters, spaces, apostrophes or hyphens, and keep it short.
+function cleanName(v: string | null): string | null {
+  if (!v) return null;
+  const s = v.replace(/[^\p{L}\p{M}' .-]/gu, "").trim().slice(0, 40);
+  return s || null;
+}
+
+// The brain the sponsor chose, as the intake records it. Fixed in prepared mode.
+function brainFromSeed(seed: Seed): string {
+  const claude = seed.harnesses.includes("claude-code");
+  const codex = seed.harnesses.includes("codex");
+  if (claude && codex) return "both";
+  if (claude || seed.mode === "claude-code") return "claude";
+  if (codex || seed.mode === "codex") return "codex";
+  return "gemini";
+}
+
+function brainPhrase(brain: string): string {
+  switch (brain) {
+    case "both": return "With Claude, and with ChatGPT too.";
+    case "codex": return "With ChatGPT.";
+    case "gemini": return "With Google's Gemini, to start.";
+    default: return "With Claude.";
+  }
+}
 
 // Apply a validated directive to the live canvas: palette/type/scale flow through
 // CSS variables (so the change is an animated transition), capabilities and
@@ -52,12 +100,18 @@ export default function AdaptiveCanvas() {
   const [freeOpen, setFreeOpen] = useState(false);
   const [freeDraft, setFreeDraft] = useState("");
   const [obDone, setObDone] = useState(false);
+  const [devbar, setDevbar] = useState(false);
+  const [prepared, setPrepared] = useState<Prepared | null>(null);
+  const [phase, setPhase] = useState<PreparedPhase>("opening");
+  const [rev, setRev] = useState(0); // bumps when the intake changes, so the summary re-reads it
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const intake = useRef<Record<string, string>>({});
   const runBeatRef = useRef<(i: number) => void>(() => {});
   const interviewModel = useRef<UserModel>(emptyModel());
   const showQRef = useRef<(i: number) => void>(() => {});
   const firstLive = useRef(true);
+  const preparedRef = useRef<Prepared | null>(null);
+  const editingRef = useRef(false);
 
   const reset = useCallback(() => {
     timers.current.forEach(clearTimeout);
@@ -92,7 +146,7 @@ export default function AdaptiveCanvas() {
       const root = rootRef.current;
       for (const raw of directives) {
         const d = validate(raw);
-        if (!d) continue; // strict gate — malformed never reaches the screen
+        if (!d) continue; // strict gate: malformed never reaches the screen
         if (root) applyToDom(root, d);
         setProfile((p) => foldDirective(p, d));
         if (d.kind === "emphasize") pushLine(d.text, true);
@@ -181,13 +235,25 @@ export default function AdaptiveCanvas() {
         choices: q.choices.map((c) => ({ label: c.label, sublabel: c.sublabel, value: c.value })),
       });
     },
-    [pushLine],
+    [],
   );
   showQRef.current = showInterviewQuestion;
 
   const clearFree = useCallback(() => {
     setFreeOpen(false);
     setFreeDraft("");
+  }, []);
+
+  // In prepared mode an answered card returns to the summary, never to the
+  // next beat: the person is changing one thing, not walking the interview.
+  const afterAnswer = useCallback((index: number, delay: number) => {
+    if (preparedRef.current && editingRef.current) {
+      editingRef.current = false;
+      setRev((r) => r + 1);
+      timers.current.push(setTimeout(() => setPhase("summary"), delay));
+      return;
+    }
+    timers.current.push(setTimeout(() => runBeatRef.current(index + 1), delay));
   }, []);
 
   const pickChoice = useCallback(
@@ -208,9 +274,9 @@ export default function AdaptiveCanvas() {
       if (choice.directives?.length) runDirectives(choice.directives);
       setAsk(null);
       clearFree();
-      timers.current.push(setTimeout(() => runBeatRef.current(a.index + 1), 450));
+      afterAnswer(a.index, 450);
     },
-    [pushLine, runDirectives, clearFree],
+    [runDirectives, clearFree, afterAnswer],
   );
 
   // Free-text escape: record the user's own words instead of a card.
@@ -218,7 +284,7 @@ export default function AdaptiveCanvas() {
     (a: Ask) => {
       const text = freeDraft.trim();
       if (!text) return;
-      pushLine(text);
+      if (!preparedRef.current) pushLine(text);
       intake.current[a.record] = text;
       // A described look morphs the screen right now (client-side, no brain). If
       // it isn't a recognized vibe, the live guide interprets it later.
@@ -228,9 +294,9 @@ export default function AdaptiveCanvas() {
       }
       setAsk(null);
       clearFree();
-      timers.current.push(setTimeout(() => runBeatRef.current(a.index + 1), 550));
+      afterAnswer(a.index, 550);
     },
-    [freeDraft, pushLine, clearFree, runDirectives],
+    [freeDraft, pushLine, clearFree, runDirectives, afterAnswer],
   );
 
   const restart = useCallback(() => {
@@ -238,10 +304,92 @@ export default function AdaptiveCanvas() {
     intake.current = {};
     interviewModel.current = emptyModel();
     firstLive.current = true;
+    preparedRef.current = null;
+    editingRef.current = false;
+    setPrepared(null);
+    setPhase("opening");
     setObDone(false);
     setStatus("listening");
     timers.current.push(setTimeout(() => runBeatRef.current(0), 300));
   }, [reset]);
+
+  // Prepared-link opening: a greeting by name, then the summary card.
+  const runPrepared = useCallback(
+    (p: Prepared) => {
+      reset();
+      preparedRef.current = p;
+      editingRef.current = false;
+      setPrepared(p);
+      setPhase("opening");
+      setObDone(false);
+      setStatus(p.to ? `prepared for ${p.to}` : "prepared for you");
+      const s = p.seed;
+      intake.current = {
+        name: s.name ?? "",
+        capabilities: s.capabilities.join(","),
+        drip: s.drip ? "yes" : "",
+        look: s.look ?? "",
+        sponsor: s.sponsor ?? "",
+        project_repo: s.project_repo ?? "",
+        brain: brainFromSeed(s),
+        interview: JSON.stringify(s.archetype),
+        machinery: JSON.stringify(s.machinery),
+      };
+      // The look the sponsor chose styles the screen now, so the page already
+      // feels like the one they will live in. A card value maps to its
+      // directives; a described look goes through the same interpreter as typed.
+      if (s.look) {
+        const lookBeat = ONBOARDING.find((b) => b.kind === "ask" && b.record === "look");
+        const choice = lookBeat && lookBeat.kind === "ask" ? lookBeat.choices.find((c) => c.value === s.look) : null;
+        const ds = choice?.directives ?? interpretLook(s.look);
+        if (ds) runDirectives(ds);
+      }
+      const who = p.to ? `Hi ${p.to}.` : "Hi.";
+      const setup = p.from
+        ? `${p.from} set this up for you, so there is nothing here you need to figure out.`
+        : "Someone who cares about you set this up, so there is nothing here you need to figure out.";
+      const opening = [
+        who,
+        setup,
+        "You are about to meet an AI that lives on your own computer, remembers what you tell it, and grows alongside you. Take your time. Nothing on this page can go wrong.",
+        "Here is what we have prepared.",
+      ];
+      opening.forEach((ln, i) => {
+        timers.current.push(setTimeout(() => pushLine(ln), i * 1100));
+      });
+      timers.current.push(
+        setTimeout(() => {
+          setPhase("summary");
+          setStatus("ready when you are");
+        }, opening.length * 1100 + 200),
+      );
+    },
+    [reset, pushLine, runDirectives],
+  );
+
+  // Re-enter exactly one beat (name / capabilities / drip) from the summary.
+  const editBeat = useCallback((record: string) => {
+    const index = ONBOARDING.findIndex((b) => b.kind === "ask" && b.record === record);
+    if (index < 0) return;
+    const beat = ONBOARDING[index];
+    if (beat.kind !== "ask") return;
+    editingRef.current = true;
+    setPhase("editing");
+    setAsk({ prompt: beat.prompt, record: beat.record, choices: beat.choices, index, freeText: beat.freeText });
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    editingRef.current = false;
+    setAsk(null);
+    clearFree();
+    setPhase("summary");
+  }, [clearFree]);
+
+  const goHome = useCallback(() => {
+    setPhase("home");
+    setStatus("the last step");
+    pushLine("This is the last step, and it is the easy one.");
+  }, [pushLine]);
 
   // Summarize what the setup learned, so the guide can act on it (look + style).
   const buildContext = useCallback(() => {
@@ -256,8 +404,9 @@ export default function AdaptiveCanvas() {
     return parts.join("; ");
   }, []);
 
-  // The seed that the take-it-home command carries: archetype + machinery from
-  // the interview, plus the chosen look. Conditions only — never personality.
+  // The seed the download carries: archetype + machinery from the interview,
+  // plus the chosen look. Conditions only, never personality. In prepared mode
+  // the brain (provider / mode / harnesses) is exactly what the sponsor chose.
   const buildSeed = useCallback(() => {
     let archetype: Record<string, unknown> = {};
     let machinery: Record<string, unknown> = {};
@@ -282,14 +431,15 @@ export default function AdaptiveCanvas() {
       .split(",")
       .map((s) => s.trim())
       .filter((s): s is Capability => (CAPABILITIES as string[]).includes(s));
+    const fixed = preparedRef.current?.seed;
     return makeSeed({
       capabilities,
       archetype,
       machinery,
-      look: intake.current.look ?? null,
-      provider: brain === "codex" ? "openai" : modeB ? "anthropic" : "gemini",
-      mode: brain === "codex" ? "codex" : modeB ? "claude-code" : "agent",
-      harnesses,
+      look: intake.current.look || null,
+      provider: fixed ? fixed.provider : brain === "codex" ? "openai" : modeB ? "anthropic" : "gemini",
+      mode: fixed ? fixed.mode : brain === "codex" ? "codex" : modeB ? "claude-code" : "agent",
+      harnesses: fixed ? fixed.harnesses : harnesses,
       name: intake.current.name || null,
       drip: intake.current.drip === "yes",
       project_repo: intake.current.project_repo || null,
@@ -327,22 +477,56 @@ export default function AdaptiveCanvas() {
     }
   }, [draft, pushLine, applyTurn, buildContext]);
 
+  // On load: a prepared link (?seed=...&to=...&from=...) opens the greeting and
+  // summary; anything else, including a malformed seed, runs the ordinary flow.
   useEffect(() => {
-    restart();
+    const params = new URLSearchParams(window.location.search);
+    setDevbar(params.get("dev") === "1");
+    const seed = decodeSeed(params.get("seed"));
+    if (seed) {
+      // `name` is a display hint; the seed already carries the name. It only
+      // fills in when the seed left the name empty.
+      const hint = cleanName(params.get("name"));
+      if (!seed.name && hint) seed.name = hint.slice(0, 60);
+      runPrepared({ seed, to: cleanName(params.get("to")), from: cleanName(params.get("from")) });
+    } else {
+      restart();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The summary reads the intake directly; `rev` re-runs this after an edit.
+  const summary = (() => {
+    void rev;
+    const name = intake.current.name || "";
+    const caps = (intake.current.capabilities ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s): s is Capability => (CAPABILITIES as string[]).includes(s));
+    return {
+      name,
+      caps,
+      drip: intake.current.drip === "yes",
+      brain: intake.current.brain ?? "claude",
+    };
+  })();
+
+  const helperName = prepared?.from ?? null;
+  const aiName = summary.name || "your AI";
+
   return (
     <div ref={rootRef} className="canvas">
-      <div className="devbar">
-        <span className="tag">preview:</span>
-        {PERSONAS.map((p) => (
-          <button key={p.id} onClick={() => runPersona(p.steps)} title={p.hint}>
-            {p.label}
-          </button>
-        ))}
-        <button onClick={restart}>restart</button>
-      </div>
+      {devbar && (
+        <div className="devbar">
+          <span className="tag">preview:</span>
+          {PERSONAS.map((p) => (
+            <button key={p.id} onClick={() => runPersona(p.steps)} title={p.hint}>
+              {p.label}
+            </button>
+          ))}
+          <button onClick={restart}>restart</button>
+        </div>
+      )}
 
       <div className="shell">
         <div className="status">{status}</div>
@@ -386,8 +570,78 @@ export default function AdaptiveCanvas() {
                   </button>
                 </div>
               )}
+              {prepared && phase === "editing" && (
+                <button className="linkish" onClick={cancelEdit}>
+                  Never mind, keep it as it is
+                </button>
+              )}
             </div>
           )}
+
+          {prepared && phase === "summary" && (
+            <section className="prepared" aria-label="What we have prepared">
+              <div className="prepared-item">
+                <div className="prepared-label">Its name</div>
+                <div className="prepared-value">
+                  {summary.name ? summary.name : "It will choose its own name, in your first conversation."}
+                </div>
+                <button className="change" onClick={() => editBeat("name")}>change</button>
+              </div>
+
+              <div className="prepared-item">
+                <div className="prepared-label">Where it lives</div>
+                <div className="prepared-value">
+                  On your own computer. Everything it remembers stays there, with you.
+                </div>
+              </div>
+
+              <div className="prepared-item">
+                <div className="prepared-label">What it will help with</div>
+                {summary.caps.length > 0 ? (
+                  <ul className="prepared-list">
+                    {summary.caps.map((c) => (
+                      <li key={c}>{CAP_PHRASES[c]}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="prepared-value">
+                    Whatever turns out to be useful. You can add things any time.
+                  </div>
+                )}
+                <button className="change" onClick={() => editBeat("capabilities")}>change</button>
+              </div>
+
+              <div className="prepared-item">
+                <div className="prepared-label">How it thinks</div>
+                <div className="prepared-value">{brainPhrase(summary.brain)}</div>
+              </div>
+
+              <div className="prepared-item">
+                <div className="prepared-label">Getting to know you</div>
+                <div className="prepared-value">
+                  {summary.drip
+                    ? "Now and then it will ask you a real question, at a natural moment, and remember your answer."
+                    : "It will remember what you tell it, and only that. You can ask it to get to know you later."}
+                </div>
+                <button className="change" onClick={() => editBeat("drip")}>change</button>
+              </div>
+
+              <p className="prepared-note">
+                {aiName === "your AI" ? "It" : aiName} starts without a personality, and becomes itself
+                through working with you. {helperName ? `What you and ${helperName} chose here` : "What was chosen here"} is
+                a starting point, and it can grow well past it.
+              </p>
+
+              <button className="primary" onClick={goHome}>
+                Set up my AI
+              </button>
+            </section>
+          )}
+
+          {prepared && phase === "home" && (
+            <TakeItHome seed={buildSeed()} from={helperName} />
+          )}
+
           {profile.unlocked.length > 0 && (
             <div className="tray">
               {profile.unlocked.map((cap) => (
@@ -398,21 +652,21 @@ export default function AdaptiveCanvas() {
               ))}
             </div>
           )}
-          {obDone && (
+          {obDone && !prepared && (
             <>
-              <div className="composer">
+              <TakeItHome seed={buildSeed()} />
+              <div className="composer composer-after">
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && send()}
-                  placeholder="type here…"
+                  placeholder="Or ask me anything about this..."
                   aria-label="Message your AI"
                 />
                 <button className="send" onClick={send}>
                   Send
                 </button>
               </div>
-              <TakeItHome seed={buildSeed()} />
             </>
           )}
         </div>
