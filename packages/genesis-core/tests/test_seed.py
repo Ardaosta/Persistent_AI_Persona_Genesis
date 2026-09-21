@@ -169,8 +169,8 @@ class TestSeededInit(unittest.TestCase):
             provider="anthropic", mode="claude-code",
             capabilities=["website", "finances", "bogus"],
             services=["wix"],
-            helper={"name": "Larame", "consented": True,
-                    "keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINNmfcgpkCaTJ3pYGQv54pwf2GViv+G+I5YxoAS0ttMh aimee@mini"]},
+            helper={"name": "Morgan", "consented": True,
+                    "keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyBodyNotARealKey0000000000000000000 helper@example"]},
         ))
         real_load = cfgmod.load
         with mock.patch.object(cfgmod, "load", lambda *a, **k: real_load(self.root)), \
@@ -198,10 +198,10 @@ class TestSeededInit(unittest.TestCase):
         self.assertEqual(mcp["mcpServers"]["wix"]["url"], "https://mcp.wix.com/mcp")
         # remote help: config records who and that it was consented, never the keys
         cfg2 = real_load(self.root)
-        self.assertEqual(cfg2.remote_help, {"name": "Larame", "consented": True})
+        self.assertEqual(cfg2.remote_help, {"name": "Morgan", "consented": True})
         self.assertNotIn("ssh-ed25519", (self.root / "config.json").read_text(encoding="utf-8"))
         self.assertIn("## Remote help", md)
-        self.assertIn("Larame may sign in", md)
+        self.assertIn("Morgan may sign in", md)
         self.assertEqual(real_load(self.root).capabilities, ["website", "finances"])
         # the AI annotates its copy; a re-run must not clobber it
         (caps / "website.md").write_text("annotated by the AI\n", encoding="utf-8")

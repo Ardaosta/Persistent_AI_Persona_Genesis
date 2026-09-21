@@ -11,8 +11,9 @@ from unittest import mock
 
 from genesis_core import remote_help as rh
 
-GOOD = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINNmfcgpkCaTJ3pYGQv54pwf2GViv+G+I5YxoAS0ttMh aimee@mini"
-GOOD2 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIISyv01Y3eJ/DyU07gkx0IrVdcM82biumAwhIVC9IzYl larame@mbp"
+# Synthetic keys: the right shape, not anyone's real key.
+GOOD = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyBodyNotARealKey0000000000000000000 helper@example"
+GOOD2 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAnotherExampleKeyBodyNotReal111111111111111111 second@example"
 
 
 class TestParking(unittest.TestCase):
@@ -35,7 +36,7 @@ class TestParking(unittest.TestCase):
 class TestWindowsScript(unittest.TestCase):
     def test_script_carries_tagged_keys_marker_and_removal(self):
         d = Path("C:/Users/x/AppData/Local/Genesis")
-        s = rh.windows_enable_script('Larame "the" Sponsor', [GOOD], d)
+        s = rh.windows_enable_script('Morgan "the" Sponsor', [GOOD], d)
         self.assertIn(GOOD + " " + rh.SUFFIX, s)
         self.assertNotIn('"the"', s)                       # quotes stripped from the name
         self.assertIn("administrators_authorized_keys", s)
@@ -57,7 +58,7 @@ class TestWindowsScript(unittest.TestCase):
             def fake_run(cmd, **kw):
                 calls.append(cmd)
                 return mock.Mock(returncode=0)
-            code = rh.windows_enable("Larame", [GOOD], Path(td), run=fake_run)
+            code = rh.windows_enable("Morgan", [GOOD], Path(td), run=fake_run)
             self.assertEqual(code, 0)
             self.assertTrue((Path(td) / "enable-remote-help.ps1").is_file())
             self.assertIn("RunAs", " ".join(calls[0]))
@@ -74,7 +75,7 @@ class TestPosix(unittest.TestCase):
             ran = []
             with mock.patch.object(Path, "home", staticmethod(lambda: home)), \
                  mock.patch.object(rh.platform, "system", return_value="Darwin"):
-                out = rh.posix_enable("Larame", [GOOD], Path(td),
+                out = rh.posix_enable("Morgan", [GOOD], Path(td),
                                       run=lambda cmd, **kw: (ran.append(cmd), mock.Mock(returncode=0))[1])
             lines = ak.read_text().splitlines()
             self.assertEqual(lines[0], "ssh-ed25519 AAAA existing@host")   # kept
@@ -83,13 +84,13 @@ class TestPosix(unittest.TestCase):
             self.assertEqual(ran[0][:2], ["sudo", "systemsetup"])
             self.assertEqual(out["note"], "remote login on")
             st = rh.status(Path(td))
-            self.assertEqual(st["name"], "Larame")
+            self.assertEqual(st["name"], "Morgan")
             remover = (Path(td) / "remove-remote-help.sh").read_text()
             self.assertIn(rh.SUFFIX, remover)
             # idempotent: a second enable does not duplicate the key
             with mock.patch.object(Path, "home", staticmethod(lambda: home)), \
                  mock.patch.object(rh.platform, "system", return_value="Linux"):
-                rh.posix_enable("Larame", [GOOD], Path(td), run=lambda *a, **k: mock.Mock(returncode=0))
+                rh.posix_enable("Morgan", [GOOD], Path(td), run=lambda *a, **k: mock.Mock(returncode=0))
             self.assertEqual(ak.read_text().count(GOOD), 1)
 
     def test_status_none_when_never_enabled(self):
