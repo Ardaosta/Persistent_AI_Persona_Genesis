@@ -701,6 +701,12 @@ def cmd_wire_claude(args) -> int:
     from . import claude_wire
     cfg = cfgmod.load()
     cfg.vault_dir.mkdir(parents=True, exist_ok=True)
+    # The manual this renders points at files in the vault (capability recipes,
+    # the services ledger). Make them exist before the pointer does: a re-wire
+    # of an older home (2026-09-21, an AI installed in June) rendered pointers
+    # to a ledger that init had never copied, because only init copied it.
+    _ensure_capability_entries(cfg)
+    _ensure_services(cfg)
     genesis_exe = _genesis_exe()
     scope = getattr(args, "scope", "project") or "project"
     home_dir = _P(args.dir).expanduser() if getattr(args, "dir", None) else None
@@ -1277,6 +1283,8 @@ def _rerender_doors(cfg) -> None:
     home = _P.home() / "My AI"
     if not home.exists():
         return
+    _ensure_capability_entries(cfg)
+    _ensure_services(cfg)
     if "claude-code" in (cfg.harnesses or []):
         from . import claude_wire
         claude_wire.wire(cfg, exe, scope="project", home_dir=home)

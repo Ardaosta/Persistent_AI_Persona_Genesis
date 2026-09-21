@@ -200,6 +200,27 @@ class TestSeededInit(unittest.TestCase):
         cli._ensure_capability_entries(real_load(self.root))
         self.assertEqual((caps / "website.md").read_text(encoding="utf-8"), "annotated by the AI\n")
 
+    def test_rewiring_an_older_home_creates_what_the_manual_points_at(self):
+        """A home from before the services loop existed has no ledger. Re-wiring
+        it must create the ledger before rendering a pointer to it."""
+        from genesis_core import cli
+        from genesis_core import config as cfgmod
+        real_load = cfgmod.load
+        cfg = real_load(self.root, creating=True)
+        cfg.vault_dir.mkdir(parents=True, exist_ok=True)
+        cfgmod.update_fields(cfg, capabilities=["calendar"])
+        home = self.root / "My AI"
+        with mock.patch.object(cfgmod, "load", lambda *a, **k: real_load(self.root, creating=True)):
+            rc = cli.cmd_wire_claude(argparse.Namespace(scope="project", dir=str(home)))
+        self.assertEqual(rc, 0)
+        svc = self.root / "vault" / "reference" / "services"
+        self.assertTrue((svc / "ledger.md").is_file())
+        self.assertTrue((svc / "connecting.md").is_file())
+        self.assertTrue((self.root / "vault" / "reference" / "capabilities" / "calendar.md").is_file())
+        md = (home / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn("services/ledger.md", md)
+        self.assertIn("capabilities/calendar.md", md)
+
     def test_capabilities_command_adds_and_rerenders(self):
         from genesis_core import cli
         from genesis_core import config as cfgmod
