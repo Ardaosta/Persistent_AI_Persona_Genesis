@@ -123,6 +123,11 @@ $VPy = Join-Path $AppDir ".venv\Scripts\python.exe"
 Write-Host "Standing up your AI's home (tuned to your setup answers)..."
 & $VPy -m genesis_core.cli init
 
+# Remote help, only if the person said yes on the web page (init parked the
+# sponsor's public keys). Windows asks for permission once. Exit 2 means
+# "not consented", the common case, and prints nothing worth reading.
+& $VPy -m genesis_core.cli remote-help enable 2>&1 | Where-Object { $_ -notmatch "not consented" }
+
 $Genesis = Join-Path $AppDir ".venv\Scripts\genesis.exe"
 $Mode = (& $VPy -m genesis_core.cli seed-mode).Trim()
 

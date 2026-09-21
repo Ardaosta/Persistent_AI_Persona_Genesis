@@ -319,6 +319,10 @@ class GenesisConfig:
     # Named online services the person uses and wants managed (wix, ...). Set by
     # a sponsor at seed time or discovered by the AI later; never presupposed.
     services: list = None
+    # Remote help, consented at setup: {"name": <sponsor>, "consented": True}.
+    # Who may sign in to fix things, never the keys (those live only in the
+    # machine's authorized-keys file). Absent means nobody.
+    remote_help: dict = None
 
     def __post_init__(self):
         if self.allowed_email_recipients is None:
@@ -443,6 +447,8 @@ def load(root: Path | None = None, *, creating: bool = False) -> GenesisConfig:
         harnesses=[h for h in (data.get("harnesses") or []) if isinstance(h, str)],
         capabilities=[c for c in (data.get("capabilities") or []) if isinstance(c, str)],
         services=[s for s in (data.get("services") or []) if isinstance(s, str)],
+        remote_help=(data.get("remote_help") if isinstance(data.get("remote_help"), dict)
+                     and data["remote_help"].get("consented") is True else None),
     )
 
 

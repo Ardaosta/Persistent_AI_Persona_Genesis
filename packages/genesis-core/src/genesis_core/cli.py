@@ -1000,6 +1000,15 @@ def _apply_seed(cfg, seed: dict) -> None:
         data["capabilities"] = list(seed["capabilities"])
     if seed.get("services"):
         data["services"] = list(seed["services"])
+    h = seed.get("helper")
+    if isinstance(h, dict) and h.get("consented") is True and h.get("keys"):
+        # Record WHO may help and that it was consented, never the keys: those
+        # are parked as public material at <root>/remote-help.keys for
+        # `genesis remote-help enable`, which the installer calls next.
+        from . import remote_help as rh
+        data["remote_help"] = {"name": h.get("name") or "", "consented": True}
+        cfg.root.mkdir(parents=True, exist_ok=True)
+        rh.park_keys(cfg.root, h)
     cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
     cfg.config_path.write_text(_json.dumps(data, indent=2), encoding="utf-8")
 
@@ -1244,6 +1253,63 @@ def cmd_services(args) -> int:
     else:
         print("no services configured. Known walkthroughs: " + ", ".join(SERVICES))
     return 0
+
+
+def cmd_remote_help(args) -> int:
+    """status | enable | off. `enable` does the one privileged thing (login
+    service on, the sponsor's public keys installed) and only if the person
+    consented at setup; every installer calls this rather than carrying its
+    own copy. `off` removes exactly what `enable` added."""
+    import os as _os
+    from . import remote_help as rh
+    cfg = cfgmod.load()
+    what = getattr(args, "what", "status") or "status"
+    d = rh.data_dir()
+    if what == "status":
+        st = rh.status(d)
+        rhc = cfg.remote_help or {}
+        if st:
+            print(f"remote help: ON, from {st.get('name') or '?'} since {st.get('enabledAt') or '?'} (keys in {st.get('keyfile')})")
+        elif rhc.get("consented") and rh.parked(cfg.root):
+            print(f"remote help: consented at setup for {rhc.get('name') or '?'}, not yet turned on. Run: genesis remote-help enable")
+        else:
+            print("remote help: off (nobody was allowed to sign in)")
+        return 0
+    if what == "enable":
+        rhc = cfg.remote_help or {}
+        keys = rh.parked(cfg.root)
+        if not (rhc.get("consented") is True and keys):
+            print("remote help was not consented at setup, so nothing to turn on.", file=sys.stderr)
+            return 2
+        name = rhc.get("name") or "the person who set this up"
+        if _os.name == "nt":
+            code = rh.windows_enable(name, keys, d)
+            if code == 0:
+                print(f"remote help is on, from {name}. Undo: {d / 'Remove-RemoteHelp.ps1'}", file=sys.stderr)
+                return 0
+            print("remote help was not turned on (permission not given, or the login service refused). "
+                  "Nothing else is affected.", file=sys.stderr)
+            return 1
+        out = rh.posix_enable(name, keys, d)
+        print(f"remote help is on, from {name}: {out['note']}. Undo: {out['remove']}", file=sys.stderr)
+        return 0
+    if what == "off":
+        if _os.name == "nt":
+            p = d / "Remove-RemoteHelp.ps1"
+            if not p.is_file():
+                p.write_text(rh.windows_remove_script(), encoding="utf-8")
+            import subprocess as _sp
+            _sp.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(p)])
+        else:
+            p = d / "remove-remote-help.sh"
+            if p.is_file():
+                import subprocess as _sp
+                _sp.run(["sh", str(p)])
+            else:
+                print("remote help was never turned on here.", file=sys.stderr)
+        return 0
+    print("usage: genesis remote-help [status|enable|off]", file=sys.stderr)
+    return 2
 
 
 def cmd_capabilities(args) -> int:
@@ -1736,6 +1802,9 @@ def main(argv=None) -> int:
     svc_p.add_argument("--add", action="append", metavar="SLUG", help="add a service (repeatable)")
     svc_p.add_argument("--remove", action="append", metavar="SLUG", help="remove a service (repeatable)")
     svc_p.set_defaults(func=cmd_services)
+    rhp = sub.add_parser("remote-help", help="let the person who set you up sign in to fix things, only if they said yes at setup: status | enable | off")
+    rhp.add_argument("what", nargs="?", choices=["status", "enable", "off"], default="status")
+    rhp.set_defaults(func=cmd_remote_help)
     wire_p = sub.add_parser(
         "wire-claude",
         help="Mode B: wire Claude Code to run as a Genesis frontend (CLAUDE.md + boot hook)",

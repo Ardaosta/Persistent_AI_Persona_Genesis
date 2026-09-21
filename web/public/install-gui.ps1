@@ -26,6 +26,10 @@
 #   # 4. the real thing (window), same env
 #   powershell -NoProfile -ExecutionPolicy Bypass -File web\public\install-gui.ps1
 #   # the log is at %LOCALAPPDATA%\Genesis\install.log
+#   # 5. remote help: a seed whose helper is consented adds step 8, which asks for
+#   #    permission once (UAC) and turns on the login service with the sponsor's
+#   #    PUBLIC keys. To undo it: -RemoveHelp (or the Remove-RemoteHelp.ps1 it wrote).
+#   powershell -NoProfile -ExecutionPolicy Bypass -File web\public\install-gui.ps1 -RemoveHelp
 #
 # Optional env: GENESIS_APP_DIR (where the code lives; default ~\.genesis-app),
 # GENESIS_REPO (where to fetch it from).
@@ -33,7 +37,8 @@
 param(
   [switch]$NoGui,
   [switch]$SkipClaudeCheck,
-  [switch]$XamlCheck
+  [switch]$XamlCheck,
+  [switch]$RemoveHelp
 )
 
 $ErrorActionPreference = "Stop"
@@ -55,6 +60,8 @@ $S.Python       = $null      # full path to a real python.exe once found
 $S.Git          = "git"
 $S.Mode         = "agent"
 $S.ClaudeLaunch = $null      # how to open the Claude app, once found
+$S.Helper       = $null      # consented remote help from the seed: @{ Name; Keys }, or $null
+$S.RemoteHelpOn = $false     # set when step 8 actually turned it on
 $S.HasWinget    = $false
 $S.Step         = 0          # 1-based index of the step in progress
 $S.StepState    = [hashtable]::Synchronized(@{})   # index -> pending|working|done|soft
@@ -71,7 +78,8 @@ $S.Steps = @(
   "Downloading your AI",
   "Setting things up",
   "Making its home",
-  "Checking for the Claude app"
+  "Checking for the Claude app",
+  "Remote help"
 )
 for ($i = 1; $i -le $S.Steps.Count; $i++) { $S.StepState[$i] = "pending" }
 
@@ -224,6 +232,39 @@ function Get-SeedName {
     $n = "$($obj.name)".Trim()
     if ($n.Length -gt 0 -and $n.Length -le 60) { return $n }
   } catch { }
+  return $null
+}
+
+# Remote help rides in the seed ONLY as a consented choice the person made on
+# the web page: helper = { name, keys[], consented: true }. Public keys only,
+# validated by shape; anything else is ignored. Returns @{ Name; Keys } or $null.
+function Get-SeedHelper {
+  $blob = $env:GENESIS_SEED
+  if (-not $blob) { return $null }
+  try {
+    $b = $blob.Trim().Replace("-", "+").Replace("_", "/")
+    $pad = (4 - ($b.Length % 4)) % 4
+    $b = $b + ("=" * $pad)
+    $json = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b))
+    $obj = $json | ConvertFrom-Json
+    $h = $obj.helper
+    if (-not $h) { return $null }
+    if ($h.consented -ne $true) { Write-Log "remote help: present in the seed but not consented; ignored."; return $null }
+    $keys = @()
+    foreach ($k in @($h.keys)) {
+      $t = "$k".Trim()
+      if ($t.Length -gt 600) { continue }
+      if ($t -notmatch '^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa) [A-Za-z0-9+/=]+( [^\s]{1,64})?$') { continue }
+      if ($keys -contains $t) { continue }
+      $keys += $t
+      if ($keys.Count -ge 4) { break }
+    }
+    if ($keys.Count -eq 0) { Write-Log "remote help: consented but no valid public key; ignored."; return $null }
+    $name = ("$($h.name)" -replace "[^\w' .-]", "").Trim()
+    if ($name.Length -gt 40) { $name = $name.Substring(0, 40) }
+    if (-not $name) { $name = "the person who set this up" }
+    return @{ Name = $name; Keys = $keys }
+  } catch { Write-Log ("remote help: could not read the seed: " + $_.Exception.Message) }
   return $null
 }
 
@@ -564,13 +605,65 @@ function Step-CheckClaude {
   }
 }
 
+# ---------------------------------------------------------------------------
+# Step 8: remote help. Only when the person said yes on the web page. Enabling
+# the login service needs administrator rights, so the work happens in ONE
+# elevated child script (one permission prompt) that `genesis remote-help enable`
+# generates from the parked public keys (core/remote_help.py, one source for every installer).
+# ---------------------------------------------------------------------------
+function Step-RemoteHelp {
+  Start-Step 8 "Checking whether you asked for remote help."
+  $h = $S.Helper
+  if (-not $h) {
+    Write-Log "remote help: not requested."
+    Complete-Step 8
+    return
+  }
+  if (-not $S.IsWin) {
+    Set-Status "Remote help is set up by the Mac and Linux installers on those computers; nothing to do here."
+    $S.StepState[8] = "soft"
+    return
+  }
+  # One source for the privileged part: `genesis remote-help enable` (core's
+  # remote_help.py) writes the elevated script from the keys init parked and
+  # runs it behind a single permission prompt. This window only narrates.
+  Set-Status ("Windows will ask for permission to let " + $h.Name + " help remotely, because you said yes to that. Choose Yes.")
+  $code = 1
+  try {
+    $r = Invoke-Native $S.VenvPython @("-m", "genesis_core.cli", "remote-help", "enable")
+    $code = $r.Code
+  } catch {
+    Write-Log ("remote help: " + $_.Exception.Message)
+    $code = 1
+  }
+  if ($code -eq 0) {
+    $S.RemoteHelpOn = $true
+    Write-Log ("remote help: on, from " + $h.Name)
+    Complete-Step 8
+    $ts = "C:\Program Files\Tailscale\tailscale-ipn.exe"
+    if (Test-Path $ts) {
+      try { Start-Process $ts | Out-Null } catch { }
+      Set-Status ("Tailscale opened. Sign in with the account " + $h.Name + " told you to use; that part is yours. Then come back here.")
+    } else {
+      Open-Url "https://tailscale.com/download/windows"
+      Set-Status ("One more thing for remote help: install Tailscale from the page that opened and sign in with the account " + $h.Name + " told you to use. That part is yours.")
+    }
+    [void](Wait-ForPerson "I've signed in to Tailscale, continue" $S.Message)
+  } else {
+    Write-Log ("remote help: elevated helper exit " + $code)
+    $S.StepState[8] = "soft"
+    Set-Status "Remote help was not turned on. You can say yes to it later; nothing else is affected."
+  }
+}
+
 # Run everything, in order, turning any failure into one calm sentence.
 function Invoke-AllSteps {
   try {
     Write-Log "==== Genesis guided install starting"
     $n = Get-SeedName
     if ($n) { $S.Name = $n }
-    Write-Log ("name: " + $S.Name + "  seed present: " + [bool]$env:GENESIS_SEED)
+    $S.Helper = Get-SeedHelper
+    Write-Log ("name: " + $S.Name + "  seed present: " + [bool]$env:GENESIS_SEED + "  remote help requested: " + [bool]$S.Helper)
     Step-CheckComputer
     Step-EnsurePython
     Step-EnsureGit
@@ -578,6 +671,7 @@ function Invoke-AllSteps {
     Step-Setup
     Step-MakeHome
     Step-CheckClaude
+    Step-RemoteHelp
     $S.Phase = "done"
     if ($S.Mode -eq "claude-code") {
       Set-Status ($S.Name + " is ready to meet you.")
@@ -698,6 +792,9 @@ $script:Xaml = @'
       <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Grid Grid.Column="0" Width="22" Height="22" HorizontalAlignment="Left"><Ellipse x:Name="Dot7"/><TextBlock x:Name="Mark7" FontSize="13" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" Text=""/></Grid>
         <TextBlock x:Name="Label7" Grid.Column="1" Text="Checking for the Claude app"/></Grid>
+      <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid Grid.Column="0" Width="22" Height="22" HorizontalAlignment="Left"><Ellipse x:Name="Dot8"/><TextBlock x:Name="Mark8" FontSize="13" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" Text=""/></Grid>
+        <TextBlock x:Name="Label8" Grid.Column="1" Text="Remote help"/></Grid>
     </StackPanel>
 
     <StackPanel x:Name="DonePanel" Grid.Row="2" VerticalAlignment="Top" Visibility="Collapsed">
@@ -830,6 +927,7 @@ function Start-Gui {
             $u.Done2.Text = "2.  Click Code at the top of the Claude window."
             $u.Done3.Text = "3.  When it asks for a folder, paste into the folder box. The folder's address is already copied for you, so just press Ctrl+V and choose it."
             $u.Done4.Text = "The folder is " + $st.HomeDir
+            if ($st.RemoteHelpOn -and $st.Helper) { $u.Done4.Text += "   " + $st.Helper.Name + " can now help from their computer when you ask. To turn that off later, run Remove-RemoteHelp from the Genesis folder." }
             $u.Action.Content = "Open Claude"
             [void](Copy-ToClipboard $st.HomeDir)
             if (-not $st.ClaudeLaunch) { $u.Done1.Text = "1.  Install the Claude app (the button below opens the download page), then open it and sign in." }
@@ -878,6 +976,16 @@ function Start-Gui {
 # ---------------------------------------------------------------------------
 # Entry.
 # ---------------------------------------------------------------------------
+if ($RemoveHelp) {
+  $d = if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "Genesis" } else { $null }
+  $p = if ($d) { Join-Path $d "Remove-RemoteHelp.ps1" } else { $null }
+  if ($p -and (Test-Path $p)) {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $p
+    exit $LASTEXITCODE
+  }
+  Write-Host "Remote help was never turned on on this computer, so there is nothing to remove."
+  exit 0
+}
 if ($XamlCheck) {
   try {
     $w = New-InstallWindow

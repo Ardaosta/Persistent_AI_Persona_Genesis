@@ -9,7 +9,7 @@ import {
   foldDirective,
   validate,
 } from "@/lib/directives";
-import { ONBOARDING, type FreeText } from "@/lib/onboarding";
+import { ONBOARDING, helperAsk, type FreeText } from "@/lib/onboarding";
 import {
   type Question,
   type UserModel,
@@ -334,6 +334,9 @@ export default function AdaptiveCanvas() {
         brain: brainFromSeed(s),
         interview: JSON.stringify(s.archetype),
         machinery: JSON.stringify(s.machinery),
+        // Remote help defaults to NOT allowed until the person chooses. The
+        // sponsor's own `consented` flag is never trusted as the answer.
+        helper: "",
       };
       // The look the sponsor chose styles the screen now, so the page already
       // feels like the one they will live in. A card value maps to its
@@ -376,6 +379,17 @@ export default function AdaptiveCanvas() {
     editingRef.current = true;
     setPhase("editing");
     setAsk({ prompt: beat.prompt, record: beat.record, choices: beat.choices, index, freeText: beat.freeText });
+  }, []);
+
+  // The remote-help consent card (prepared links with a helper only). Its
+  // `index` is unused: afterAnswer returns to the summary in prepared mode.
+  const editHelper = useCallback(() => {
+    const p = preparedRef.current;
+    if (!p?.seed.helper) return;
+    const who = p.seed.helper.name || p.from || null;
+    editingRef.current = true;
+    setPhase("editing");
+    setAsk({ ...helperAsk(who, intake.current.name || "your AI"), index: -1 });
   }, []);
 
   const cancelEdit = useCallback(() => {
@@ -444,6 +458,9 @@ export default function AdaptiveCanvas() {
         capabilities: intake.current.capabilities !== undefined ? capabilities : fixed.capabilities,
         name: intake.current.name !== undefined ? intake.current.name || null : fixed.name,
         drip: intake.current.drip !== undefined ? intake.current.drip === "yes" : fixed.drip,
+        // Remote help rides into the download only as a consented choice made
+        // on this page. Anything else drops the helper entirely, keys included.
+        helper: fixed.helper && intake.current.helper === "yes" ? { ...fixed.helper, consented: true } : null,
       });
     }
     return makeSeed({
@@ -523,11 +540,16 @@ export default function AdaptiveCanvas() {
       caps,
       drip: intake.current.drip === "yes",
       brain: intake.current.brain ?? "claude",
+      helper: intake.current.helper === "yes",
     };
   })();
 
   const helperName = prepared?.from ?? null;
   const aiName = summary.name || "your AI";
+  // The sponsor who offered remote help: the helper's own name, else the link's
+  // `from`, else a plain phrase. Only shown when the seed carries keys.
+  const remoteHelper = prepared?.seed.helper ?? null;
+  const remoteName = remoteHelper ? remoteHelper.name || helperName || "the person who set this up" : null;
 
   return (
     <div ref={rootRef} className="canvas">
@@ -640,6 +662,20 @@ export default function AdaptiveCanvas() {
                 </div>
                 <button className="change" onClick={() => editBeat("drip")}>change</button>
               </div>
+
+              {remoteHelper && remoteName && (
+                <div className="prepared-item">
+                  <div className="prepared-label">Help from {remoteName}</div>
+                  <div className="prepared-value">
+                    {remoteName} could reach into this computer to fix or update {aiName} when you ask.
+                    Nothing happens without you asking, and you can switch it off any time.
+                    <span className={summary.helper ? "prepared-state on" : "prepared-state"}>
+                      {summary.helper ? "Allowed" : "Not now"}
+                    </span>
+                  </div>
+                  <button className="change" onClick={editHelper}>change</button>
+                </div>
+              )}
 
               <p className="prepared-note">
                 {aiName === "your AI" ? "It" : aiName} starts without a personality, and becomes itself
