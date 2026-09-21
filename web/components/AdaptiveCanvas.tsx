@@ -440,6 +440,10 @@ export default function AdaptiveCanvas() {
       provider: fixed ? fixed.provider : brain === "codex" ? "openai" : modeB ? "anthropic" : "gemini",
       mode: fixed ? fixed.mode : brain === "codex" ? "codex" : modeB ? "claude-code" : "agent",
       harnesses: fixed ? fixed.harnesses : harnesses,
+      // Services are named only by a sponsor in a prepared link; the plain flow
+      // never presupposes one. Dropping this line once cost a first user her
+      // pre-wired site connection (2026-09-21).
+      services: fixed ? fixed.services : [],
       name: intake.current.name || null,
       drip: intake.current.drip === "yes",
       project_repo: intake.current.project_repo || null,
