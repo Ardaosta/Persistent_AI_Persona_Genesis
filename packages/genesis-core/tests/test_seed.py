@@ -159,6 +159,53 @@ class TestSeededInit(unittest.TestCase):
         keyprompt.assert_not_called()
         daemon.assert_not_called()
 
+    def test_seed_capabilities_land_as_vault_recipes_the_manual_points_at(self):
+        from genesis_core import cli
+        from genesis_core import config as cfgmod
+        blob = seedmod.encode(seedmod.make_seed(
+            machinery={"proactivity": "active"},
+            archetype={"relationship": "tool", "engagement": "turnkey",
+                       "scope": "narrow", "modality": "text"},
+            provider="anthropic", mode="claude-code",
+            capabilities=["website", "finances", "bogus"],
+        ))
+        real_load = cfgmod.load
+        with mock.patch.object(cfgmod, "load", lambda *a, **k: real_load(self.root)), \
+             mock.patch.object(cli._P, "home", return_value=self.root), \
+             mock.patch.object(cli, "cmd_setup_daemon"), \
+             mock.patch.object(cli, "_prompt_for_key"):
+            rc = cli.cmd_init(argparse.Namespace(seed=blob, mode="agent"))
+        self.assertEqual(rc, 0, "verify must pass: every pointer the manual makes exists")
+        caps = self.root / "vault" / "reference" / "capabilities"
+        self.assertTrue((caps / "website.md").is_file())
+        self.assertTrue((caps / "finances.md").is_file())
+        self.assertFalse((caps / "social.md").exists())
+        self.assertFalse((caps / "bogus.md").exists())
+        md = (self.root / "My AI" / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertIn("## What you help with", md)
+        self.assertIn("capabilities/website.md", md)
+        self.assertEqual(real_load(self.root).capabilities, ["website", "finances"])
+        # the AI annotates its copy; a re-run must not clobber it
+        (caps / "website.md").write_text("annotated by the AI\n", encoding="utf-8")
+        cli._ensure_capability_entries(real_load(self.root))
+        self.assertEqual((caps / "website.md").read_text(encoding="utf-8"), "annotated by the AI\n")
+
+    def test_capabilities_command_adds_and_rerenders(self):
+        from genesis_core import cli
+        from genesis_core import config as cfgmod
+        real_load = cfgmod.load
+        cfgmod.update_fields(real_load(self.root, creating=True), harnesses=["claude-code"])
+        (self.root / "vault").mkdir(exist_ok=True)
+        (self.root / "My AI").mkdir()
+        with mock.patch.object(cfgmod, "load", lambda *a, **k: real_load(self.root, creating=True)), \
+             mock.patch.object(cli._P, "home", return_value=self.root):
+            self.assertEqual(cli.cmd_capabilities(argparse.Namespace(add=["calendar"], remove=None)), 0)
+            self.assertEqual(cli.cmd_capabilities(argparse.Namespace(add=["nope"], remove=None)), 2)
+        self.assertEqual(real_load(self.root).capabilities, ["calendar"])
+        self.assertTrue((self.root / "vault" / "reference" / "capabilities" / "calendar.md").is_file())
+        self.assertIn("capabilities/calendar.md",
+                      (self.root / "My AI" / "CLAUDE.md").read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

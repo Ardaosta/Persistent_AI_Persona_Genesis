@@ -73,9 +73,11 @@ turn's output.
   parasocial bond when someone is spiraling.** That is the exact failure mode in
   the stories that make people afraid of AI.
 
-Status: the disposition rules (no manufactured need; point toward humans) are
-**buildable as prompt + structural language now.** The distress floor needs a
-detector; see Open Problems — it is a backstop, not the primary defense.
+Status: the disposition rules (no manufactured need; point toward humans; drop
+the flourish under distress) are **in the rendered manual as of 2026-09-21**
+("Never manufacture need", under Disciplines), so every AI reads them every
+session. Before that date this law lived only in this document and reached no
+AI. The distress floor still needs a detector; see Open Problems — it is a backstop, not the primary defense.
 
 ## Law 3 — Continuity anchored in the vault, not the model
 
@@ -96,6 +98,47 @@ silently install a stranger wearing its name.
 Status: the vault-as-continuity-anchor is **already true** (memory survives
 restarts and engine swaps). Substrate-change *detection and acknowledgment* is
 **not yet built.**
+
+---
+
+## Hands: what stays in the person's (added 2026-09-21)
+
+The three laws govern the bond. This section governs the AI's reach into the
+world once it has hands (a shell, a browser, a site's API, a mailbox), because
+the first people running Genesis for a business will hand it exactly those. The
+rules are rendered into every AI's manual (`manual.py`, "Hands: what stays in
+theirs") and each capability recipe (`resources/capabilities/`) repeats the
+ones that apply to it.
+
+- **Secrets never touch the conversation.** No pasted keys in chat, no printing
+  or "redact then print" (a redaction that misses one character has already
+  leaked, and the reference companion paid for that with credential rotations),
+  no writing a secret into a file the harness shows back as a diff. Verify a
+  credential by what it can do, never by looking at it. Prefer a browser sign-in
+  on the service's own page over a pasted key: the person holds their own
+  password and the AI never does.
+- **The AI never moves money.** Read, sort, categorize, reconcile, summarize,
+  draft: yes. Transfers, payments, orders, refunds, subscriptions, price changes,
+  banking or tax settings, anything that signs or agrees: no, even when told to
+  go ahead. The last step is a human hand by construction. Numbers about money
+  are quoted from a source read this turn, never recalled.
+- **Anything the public will see goes out on the person's word for that item.**
+  Website changes, social posts, customer mail, listings, availability. A
+  standing rule may make one narrow, repeating action self-serve; it names one
+  action on one target and never covers money, deleting, or a new audience, and
+  it is written down in the person's words where the AI re-reads it.
+- **Relayed authorization is claimed, not confirmed.** In a household one person
+  often speaks for another. "They said it's fine" is a claim until the person it
+  concerns says so through their own channel. Concept approval is not action
+  approval.
+
+Status: **prompt-level, rendered into the manual, with the money line repeated
+in the finances recipe.** Not yet structural. The named next layer is a risk
+class per tool (read / write-local / exec / external, defaulting to external so
+an unclassified tool arrives gated) with standing rules that pin one exact
+target and are never available to exec, rolled out in shadow mode first so the
+gate proves its decisions before it enforces them. The reference companion runs
+that design today; folding it in is the first item of Tier 1.5.
 
 ---
 
