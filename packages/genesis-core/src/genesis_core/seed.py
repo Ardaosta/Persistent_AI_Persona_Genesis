@@ -31,9 +31,26 @@ SEED_VERSION = 1
 # or both; `mode` stays the primary), `project_repo` (a repository the AI is
 # joining, so it can import that project's seed pack), and `drip` (opt-in to
 # the getting-to-know-you question drip). Still conditions, never content.
+# Added 2026-09-21: `capabilities`, the domains the person asked for help with
+# (website, social, calendar, email, finances). Each slug is a pointer at a
+# content-free recipe copied into the vault at init; the manual lists them. A
+# slug not in CAPABILITIES is dropped, so a seed can never point at a file it
+# did not ship. Conditions, never content.
 _ALLOWED = {"v", "archetype", "machinery", "look", "provider", "sponsor", "mode",
-            "name", "harnesses", "project_repo", "drip"}
+            "name", "harnesses", "project_repo", "drip", "capabilities"}
 HARNESSES = ("claude-code", "codex")
+CAPABILITIES = ("website", "social", "calendar", "email", "finances")
+
+
+def clean_capabilities(value) -> list:
+    """Keep known slugs, in the order given, without duplicates."""
+    if not isinstance(value, (list, tuple)):
+        return []
+    out = []
+    for x in value:
+        if isinstance(x, str) and x in CAPABILITIES and x not in out:
+            out.append(x)
+    return out
 
 
 def make_seed(
@@ -48,6 +65,7 @@ def make_seed(
     harnesses: list | None = None,
     project_repo: str | None = None,
     drip: bool = False,
+    capabilities: list | None = None,
 ) -> dict:
     return {
         "v": SEED_VERSION,
@@ -61,6 +79,7 @@ def make_seed(
         "harnesses": [h for h in (harnesses or []) if h in HARNESSES],
         "project_repo": (project_repo or "").strip()[:300] or None,
         "drip": bool(drip),
+        "capabilities": clean_capabilities(capabilities),
     }
 
 
@@ -97,6 +116,7 @@ def decode(blob: str) -> dict:
     clean["name"] = str(clean["name"]).strip()[:60] if clean.get("name") else None
     clean["project_repo"] = str(clean["project_repo"]).strip()[:300] if clean.get("project_repo") else None
     clean["drip"] = bool(clean.get("drip", False))
+    clean["capabilities"] = clean_capabilities(clean.get("capabilities"))
     return clean
 
 

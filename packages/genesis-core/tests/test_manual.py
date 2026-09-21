@@ -22,6 +22,40 @@ class TestManual(unittest.TestCase):
             self.assertIn(needle, md)
         self.assertNotIn("Getting to know them", md)
 
+    def test_hands_rules_and_law_two_reach_the_manual(self):
+        cfg = cfgmod.GenesisConfig(root=Path("/tmp/h"))
+        md = manual.render(cfg, "/bin/genesis")
+        for needle in ("Hands: what stays in theirs", "never touches the conversation",
+                       "redact then", "You never move", "human hand by construction", "standing rule",
+                       "Never manufacture need", "A missing option is not a missing thing",
+                       "CLAIMED, not confirmed", "never stash, hard-reset",
+                       "an offer, not a script"):
+            self.assertIn(needle, md)
+        # No capabilities configured → no section, no dangling pointer for verify to trip on.
+        self.assertNotIn("What you help with", md)
+
+    def test_capabilities_render_as_vault_pointers(self):
+        cfg = cfgmod.GenesisConfig(root=Path("/tmp/h"), capabilities=["website", "finances"])
+        md = manual.render(cfg, "/bin/genesis")
+        self.assertIn("## What you help with", md)
+        self.assertIn("reference/capabilities/website.md", md)
+        self.assertIn("reference/capabilities/finances.md", md)
+        self.assertNotIn("capabilities/social.md", md)
+        # the same text on both doors: the section is not harness-specific
+        self.assertEqual(md, manual.render(cfg, "/bin/genesis", harness="codex"))
+
+    def test_every_known_capability_ships_a_recipe(self):
+        from genesis_core.seed import CAPABILITIES
+        res = Path(manual.__file__).with_name("resources") / "capabilities"
+        for slug in CAPABILITIES:
+            p = res / f"{slug}.md"
+            self.assertTrue(p.is_file(), f"missing recipe for {slug}")
+            body = p.read_text(encoding="utf-8")
+            self.assertIn("## Standing rules", body, slug)
+            self.assertIn("## Log", body, slug)
+        # recipes are machinery: none may carry a soul
+        self.assertEqual(emptiness.scan(res), [])
+
     def test_seed_roundtrip_carries_new_conditions(self):
         s = seedmod.make_seed(name="Quill", harnesses=["codex", "claude-code", "bogus"],
                               project_repo="https://x/y", drip=True, mode="claude-code")
@@ -30,6 +64,25 @@ class TestManual(unittest.TestCase):
         self.assertEqual(out["harnesses"], ["codex", "claude-code"])
         self.assertEqual(out["project_repo"], "https://x/y")
         self.assertTrue(out["drip"])
+
+    def test_seed_capabilities_keep_known_slugs_only_in_order(self):
+        s = seedmod.make_seed(capabilities=["finances", "bogus", "website", "finances"])
+        out = seedmod.decode(seedmod.encode(s))
+        self.assertEqual(out["capabilities"], ["finances", "website"])
+        # a hand-built blob with a bad shape degrades to empty, never crashes
+        import base64, json
+        raw = json.dumps({"v": 1, "capabilities": "website"}).encode()
+        blob = base64.urlsafe_b64encode(raw).decode().rstrip("=")
+        self.assertEqual(seedmod.decode(blob)["capabilities"], [])
+
+    def test_config_roundtrip_of_capabilities(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = cfgmod.GenesisConfig(root=Path(td))
+            cfgmod.update_fields(cfg, capabilities=["calendar"])
+            back = cfgmod.load(Path(td), creating=True)
+            self.assertEqual(back.capabilities, ["calendar"])
+            cfgmod.update_fields(cfg, capabilities=None)
+            self.assertEqual(cfgmod.load(Path(td), creating=True).capabilities, [])
 
     def test_config_roundtrip_of_new_fields(self):
         with tempfile.TemporaryDirectory() as td:

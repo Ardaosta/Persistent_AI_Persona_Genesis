@@ -312,6 +312,10 @@ class GenesisConfig:
     project_repo: str | None = None    # a repository this AI is joining (URL or path)
     drip: bool = False                 # the getting-to-know-you question drip is on
     harnesses: list = None             # Mode-B doors wired into this home: claude-code, codex
+    # 2026-09-21: the domains the person asked for help with (website, social,
+    # calendar, email, finances). Pointers at content-free recipes in the vault;
+    # the manual lists them. Still a condition, never a self.
+    capabilities: list = None
 
     def __post_init__(self):
         if self.allowed_email_recipients is None:
@@ -320,6 +324,8 @@ class GenesisConfig:
             self.machinery = {}
         if self.harnesses is None:
             self.harnesses = []
+        if self.capabilities is None:
+            self.capabilities = []
 
     @property
     def engine_trains(self) -> bool:
@@ -430,6 +436,7 @@ def load(root: Path | None = None, *, creating: bool = False) -> GenesisConfig:
         project_repo=(data.get("project_repo") or None),
         drip=bool(data.get("drip", False)),
         harnesses=[h for h in (data.get("harnesses") or []) if isinstance(h, str)],
+        capabilities=[c for c in (data.get("capabilities") or []) if isinstance(c, str)],
     )
 
 

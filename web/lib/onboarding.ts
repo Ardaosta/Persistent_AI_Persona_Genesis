@@ -133,6 +133,33 @@ export const ONBOARDING: Beat[] = [
     ],
   },
   {
+    kind: "ask",
+    record: "capabilities",
+    prompt: "What should it help with first? It starts with a recipe for each of these, and you can add more later.",
+    choices: [
+      {
+        label: "A business's public face",
+        sublabel: "Website, social posts, the calendar and bookings, customer email. It drafts; you publish.",
+        value: "website,social,calendar,email",
+      },
+      {
+        label: "My own admin",
+        sublabel: "Calendar, email, and seeing my money clearly. It never moves money.",
+        value: "calendar,email,finances",
+      },
+      {
+        label: "All of it",
+        sublabel: "Website, social, calendar, email, finances.",
+        value: "website,social,calendar,email,finances",
+      },
+      {
+        label: "Nothing specific yet",
+        sublabel: "We'll find out together. Add any of these later.",
+        value: "",
+      },
+    ],
+  },
+  {
     kind: "say",
     lines: ["Two more, and both are optional."],
   },

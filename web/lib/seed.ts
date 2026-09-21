@@ -7,6 +7,11 @@
 // web never executes anything on their box and never phones home for the seed.
 
 export type Harness = "claude-code" | "codex";
+// Mirrors seed.py CAPABILITIES: the domains the person asked for help with.
+// Pointers at content-free recipes copied into the vault at init; unknown
+// slugs are dropped on decode, so this list and seed.py must agree.
+export type Capability = "website" | "social" | "calendar" | "email" | "finances";
+export const CAPABILITIES: Capability[] = ["website", "social", "calendar", "email", "finances"];
 
 export type Seed = {
   v: number;
@@ -24,6 +29,8 @@ export type Seed = {
   harnesses: Harness[];
   project_repo: string | null;
   drip: boolean;
+  // 2026-09-21: what it helps with (mirrored in seed.py). Conditions, never content.
+  capabilities: Capability[];
 };
 
 export const SEED_VERSION = 1;
@@ -39,7 +46,12 @@ export function makeSeed(opts: {
   harnesses?: Harness[];
   project_repo?: string | null;
   drip?: boolean;
+  capabilities?: Capability[];
 }): Seed {
+  const caps: Capability[] = [];
+  for (const c of opts.capabilities ?? []) {
+    if (CAPABILITIES.includes(c) && !caps.includes(c)) caps.push(c);
+  }
   return {
     v: SEED_VERSION,
     archetype: opts.archetype ?? {},
@@ -52,6 +64,7 @@ export function makeSeed(opts: {
     harnesses: opts.harnesses ?? [],
     project_repo: (opts.project_repo ?? "").trim().slice(0, 300) || null,
     drip: opts.drip ?? false,
+    capabilities: caps,
   };
 }
 

@@ -975,6 +975,8 @@ def _apply_seed(cfg, seed: dict) -> None:
         data["drip"] = True
     if seed.get("harnesses"):
         data["harnesses"] = list(seed["harnesses"])
+    if seed.get("capabilities"):
+        data["capabilities"] = list(seed["capabilities"])
     cfg.config_path.parent.mkdir(parents=True, exist_ok=True)
     cfg.config_path.write_text(_json.dumps(data, indent=2), encoding="utf-8")
 
@@ -1035,6 +1037,12 @@ def cmd_init(args) -> int:
     # in it), and the manual points at that path, which `genesis verify` checks.
     if cfg.drip:
         _ensure_question_bank(cfg)
+
+    # The capability recipes the person asked for land the same way: copied once,
+    # pointed at by the manual, checked by `genesis verify`.
+    if cfg.capabilities:
+        for p in _ensure_capability_entries(cfg):
+            print(f"capability ready: {p.stem}", file=sys.stderr)
 
     # Mode B: an agentic harness is the brain (authed by the user's own subscription),
     # so there's no API key to fetch. Wire each requested door and point them at it.
@@ -1133,6 +1141,72 @@ def _wire_harnesses(cfg, harnesses: list) -> None:
         print(f'(Or from a terminal: cd "{home}" && codex)', file=sys.stderr)
     if both:
         print("Both doors read and write the SAME memory, so nothing forks whichever you open.", file=sys.stderr)
+
+
+def _ensure_capability_entries(cfg) -> list:
+    """Copy the shipped recipe for each configured capability into the vault
+    once (`vault/reference/capabilities/<slug>.md`). The manual points at these
+    paths, so `genesis verify` catches a slug with no file. The AI may annotate
+    its copy (a standing rule the person gave, a wired tool); the shipped copy
+    is never overwritten on a re-run, for the same reason the question bank is
+    not. Returns the paths that exist afterwards."""
+    from .seed import clean_capabilities
+    src_dir = _P(__file__).with_name("resources") / "capabilities"
+    out = []
+    for slug in clean_capabilities(cfg.capabilities):
+        src = src_dir / f"{slug}.md"
+        dst = cfg.vault_dir / "reference" / "capabilities" / f"{slug}.md"
+        if not dst.exists() and src.is_file():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        if dst.exists():
+            out.append(dst)
+    return out
+
+
+def cmd_capabilities(args) -> int:
+    """List, add, or remove the domains this AI helps with, then re-render every
+    wired door so the manual and the config never disagree."""
+    from .seed import CAPABILITIES, clean_capabilities
+    cfg = cfgmod.load()
+    current = clean_capabilities(cfg.capabilities)
+    changed = False
+    for slug in (getattr(args, "add", None) or []):
+        if slug not in CAPABILITIES:
+            print(f"unknown capability '{slug}'. Known: {', '.join(CAPABILITIES)}", file=sys.stderr)
+            return 2
+        if slug not in current:
+            current.append(slug)
+            changed = True
+    for slug in (getattr(args, "remove", None) or []):
+        if slug in current:
+            current.remove(slug)
+            changed = True
+    if changed:
+        cfgmod.update_fields(cfg, capabilities=current or None)
+        cfg = cfgmod.load()
+        _ensure_capability_entries(cfg)
+        _rerender_doors(cfg)
+    if current:
+        for slug in current:
+            print(f"  {slug}: {cfg.vault_dir / 'reference' / 'capabilities' / (slug + '.md')}")
+    else:
+        print("no capabilities configured. Known: " + ", ".join(CAPABILITIES))
+    return 0
+
+
+def _rerender_doors(cfg) -> None:
+    """Re-render CLAUDE.md / AGENTS.md for every wired harness (compile, don't fork)."""
+    exe = _genesis_exe()
+    home = _P.home() / "My AI"
+    if not home.exists():
+        return
+    if "claude-code" in (cfg.harnesses or []):
+        from . import claude_wire
+        claude_wire.wire(cfg, exe, scope="project", home_dir=home)
+    if "codex" in (cfg.harnesses or []):
+        from . import codex_wire
+        codex_wire.wire(cfg, exe, home_dir=home)
 
 
 def _ensure_question_bank(cfg) -> _P:
@@ -1267,14 +1341,7 @@ def cmd_name(args) -> int:
     cfgmod.update_fields(cfg, name=name[:60])
     cfg.name = name[:60]
     # Re-render every wired door so the manual reassembles under the name next session.
-    exe = _genesis_exe()
-    home = _P.home() / "My AI"
-    if "claude-code" in cfg.harnesses and home.exists():
-        from . import claude_wire
-        claude_wire.wire(cfg, exe, scope="project", home_dir=home)
-    if "codex" in cfg.harnesses and home.exists():
-        from . import codex_wire
-        codex_wire.wire(cfg, exe, home_dir=home)
+    _rerender_doors(cfg)
     print(f"named: {cfg.name}", file=sys.stderr)
     return 0
 
@@ -1407,7 +1474,15 @@ def cmd_import(args) -> int:
               "(connect a private engine first).", file=sys.stderr)
         return 1
     notes = []
-    out = import_pack(cfg.vault_dir, _P(args.path).expanduser(), warn=notes.append)
+    allow_soul = bool(getattr(args, "allow_soul", False))
+    if allow_soul:
+        # The owner-authored exception, taken on purpose and said out loud. A
+        # project seed can never install a self; the PERSON who owns this home
+        # can offer one as a footing. The manual tells the AI to hold it loosely.
+        print("importing soul facts too: an owner-authored footing, on your say-so. "
+              "Your AI will read them as an offer, not a script.", file=sys.stderr)
+    out = import_pack(cfg.vault_dir, _P(args.path).expanduser(), allow_soul=allow_soul,
+                      warn=notes.append)
     for w in out["written"]:
         print(f"  imported {w}", file=sys.stderr)
     for name, why in out["skipped"]:
@@ -1566,7 +1641,13 @@ def main(argv=None) -> int:
     ra_p.set_defaults(func=cmd_reanchor)
     im_p = sub.add_parser("import", help="pre-seed the vault from a folder of fact files (a project's docs/agent-seed)")
     im_p.add_argument("path", help="folder of *.md fact files")
+    im_p.add_argument("--allow-soul", action="store_true",
+                      help="also import `kind: soul` facts: the owner-authored footing you wrote for YOUR AI on purpose (a project seed never gets this)")
     im_p.set_defaults(func=cmd_import)
+    cap_p = sub.add_parser("capabilities", help="list, add, or remove the domains this AI helps with (website, social, calendar, email, finances)")
+    cap_p.add_argument("--add", action="append", metavar="SLUG", help="add a capability (repeatable)")
+    cap_p.add_argument("--remove", action="append", metavar="SLUG", help="remove a capability (repeatable)")
+    cap_p.set_defaults(func=cmd_capabilities)
     wire_p = sub.add_parser(
         "wire-claude",
         help="Mode B: wire Claude Code to run as a Genesis frontend (CLAUDE.md + boot hook)",

@@ -37,6 +37,16 @@ class TestImport(unittest.TestCase):
         self.assertEqual(f.description, "what the project is")
         self.assertIn("Body", f.body)
 
+    def test_allow_soul_is_the_owner_authored_lane(self):
+        """The one sanctioned way an authored footing enters a vault: explicit,
+        per-call, never the default. The same pack refuses soul without it."""
+        self._w("self.md", "---\nid: footing\nkind: soul\ndescription: an owner-authored footing\n---\noffered\n")
+        self.assertEqual(import_pack(self.vault, self.pack)["written"], [])
+        out = import_pack(self.vault, self.pack, allow_soul=True)
+        self.assertEqual(out["written"], ["soul/footing"])
+        self.assertEqual(out["skipped"], [])
+        self.assertEqual(Vault(self.vault).get("footing").kind, "soul")
+
     def test_rerun_updates_not_duplicates(self):
         self._w("a.md", "---\nid: a\nkind: reference\ndescription: v1\n---\n")
         import_pack(self.vault, self.pack)

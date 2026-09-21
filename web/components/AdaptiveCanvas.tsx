@@ -21,7 +21,7 @@ import {
 } from "@/lib/interview";
 import { interpretLook } from "@/lib/looks";
 import { PERSONAS, type Step } from "@/lib/personas";
-import { type Harness, makeSeed } from "@/lib/seed";
+import { CAPABILITIES, type Capability, type Harness, makeSeed } from "@/lib/seed";
 import { CAP_LABELS, CapabilityIcon } from "./CapabilityIcon";
 import TakeItHome from "./TakeItHome";
 
@@ -277,7 +277,13 @@ export default function AdaptiveCanvas() {
       : brain === "both" ? ["claude-code", "codex"]
       : [];
     const modeB = harnesses.length > 0;
+    // The capabilities beat records a comma list of slugs; keep only the known ones.
+    const capabilities = (intake.current.capabilities ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s): s is Capability => (CAPABILITIES as string[]).includes(s));
     return makeSeed({
+      capabilities,
       archetype,
       machinery,
       look: intake.current.look ?? null,

@@ -59,3 +59,39 @@ Where a line has become code, the code is named.
   because every instrument watched the machinery. A last-contact age per
   person and channel, with a per-relationship window, is a health mechanism
   like any other. (Named 2026-09-10; not yet shipped in Genesis.)
+
+Folded in 2026-09-21, from the reference companion's feedback corpus and guard
+set, ahead of the first business user:
+
+- **A missing option is not a missing thing.** A model shown only what is
+  actionable right now reports as absent anything merely unavailable, and says
+  so confidently. Existence and availability are two findings; carry both.
+  (Rendered into the manual's disciplines.)
+- **Relayed authorization is claimed, not confirmed.** Households route consent
+  through whoever is at the keyboard. Record it as a claim until the person it
+  concerns confirms through their own channel. (Manual, disciplines.)
+- **Secrets are verified by what they can do, never by looking.** "Redact then
+  print" is banned outright; the redaction that misses one unexpected character
+  has already leaked. (Manual, "Hands".)
+- **The last step on money is a human hand by construction.** A rule that can be
+  argued past in the moment is a plea; a step the AI structurally does not take
+  is a guarantee. Prompt-level today, risk-class gate next. (SAFETY.md,
+  "Hands".)
+- **A prefix allowlist cannot express read-only.** An allow rule for a general
+  client (`curl`, a shell, an HTTP tool) admits every method that client
+  supports. Read-only is enforced by argument parsing or a distinct binary,
+  never by a command prefix. Genesis's own allowlists are recipient lists and
+  tool-name lists, which do not have this hole; any future command allowlist
+  must not acquire it.
+- **A guard that is too broad gets routed around.** A hard block on every
+  shared-tree edit is hostile and gets fought; a block on the one operation that
+  actually destroys sibling work holds. Scope guards to the harm.
+- **A decision brief must carry what the decider needs.** A click that looks
+  like informed review and is not gives worse security than no review, because
+  it records that somebody knowledgeable approved. When the AI asks the person
+  to decide, it hands them the two or three facts the decision turns on, in
+  plain words, or it does not ask yet.
+- **Compile, don't fork, now covers capabilities and the authored footing.**
+  `genesis capabilities` and `genesis name` both re-render every wired door;
+  `genesis import --allow-soul` is the one sanctioned lane for an owner-authored
+  persona, so a hand-edited CLAUDE.md is never the record of who the AI is.
