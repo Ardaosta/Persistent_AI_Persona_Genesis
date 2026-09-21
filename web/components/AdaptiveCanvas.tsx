@@ -432,18 +432,29 @@ export default function AdaptiveCanvas() {
       .map((s) => s.trim())
       .filter((s): s is Capability => (CAPABILITIES as string[]).includes(s));
     const fixed = preparedRef.current?.seed;
+    if (fixed) {
+      // A prepared link: start from EVERYTHING the sponsor sent and override only
+      // what the person could change on this page (name, capabilities, drip).
+      // Never enumerate the fixed fields here: enumerating them once dropped a
+      // newly added key (services) and cost the first real user her pre-wired
+      // site connection (2026-09-21). A key the sponsor sent survives by
+      // construction, including ones this page has never heard of.
+      return makeSeed({
+        ...fixed,
+        capabilities: intake.current.capabilities !== undefined ? capabilities : fixed.capabilities,
+        name: intake.current.name !== undefined ? intake.current.name || null : fixed.name,
+        drip: intake.current.drip !== undefined ? intake.current.drip === "yes" : fixed.drip,
+      });
+    }
     return makeSeed({
       capabilities,
       archetype,
       machinery,
       look: intake.current.look || null,
-      provider: fixed ? fixed.provider : brain === "codex" ? "openai" : modeB ? "anthropic" : "gemini",
-      mode: fixed ? fixed.mode : brain === "codex" ? "codex" : modeB ? "claude-code" : "agent",
-      harnesses: fixed ? fixed.harnesses : harnesses,
-      // Services are named only by a sponsor in a prepared link; the plain flow
-      // never presupposes one. Dropping this line once cost a first user her
-      // pre-wired site connection (2026-09-21).
-      services: fixed ? fixed.services : [],
+      provider: brain === "codex" ? "openai" : modeB ? "anthropic" : "gemini",
+      mode: brain === "codex" ? "codex" : modeB ? "claude-code" : "agent",
+      harnesses,
+      services: [], // the plain flow never presupposes a service
       name: intake.current.name || null,
       drip: intake.current.drip === "yes",
       project_repo: intake.current.project_repo || null,
