@@ -32,6 +32,7 @@ def _cmds(cfg, genesis_exe: str) -> dict:
         "import_cmd": f'"{exe}" import',
         "capabilities_cmd": f'"{exe}" capabilities',
         "services_cmd": f'"{exe}" services',
+        "loops_cmd": f'"{exe}" loops',
         "vault_dir": str(cfg.vault_dir),
     }
 
@@ -180,13 +181,47 @@ Genesis folder; if they ask you how, tell them exactly that.
 """
 
 
+def question_bank(cfg) -> tuple[str, str]:
+    """(shipped resource, vault filename) for this AI's drip bank. The fork reads
+    the onboarding's own tool/companion answer (machinery["question_bank"]), so
+    no new question is asked: a person who wants a capable assistant gets the
+    working-style bank, a person who wants a companion gets the relationship
+    bank. Absent the key (every agent onboarded before 2026-09-29), nothing
+    changes: relationship, as before."""
+    bank = ((getattr(cfg, "machinery", None) or {}).get("question_bank") or "relationship")
+    if bank == "working":
+        return "working_questions.md", "working-questions.md"
+    return "relationship_questions.md", "relationship-questions.md"
+
+
+def _open_loops(cfg, c: dict) -> str:
+    return f"""
+## Open loops: follow through without being asked
+
+Things that were started and not finished (a job, a pull request, a promise, a
+deadline, "I'll look at it Monday") live in ONE place: your open loops, via the
+`open_loops` tool or `{c['loops_cmd']}`. Not in a fact, and never as a fact
+with an empty body, because a placeholder looks handled and isn't.
+- Open one the moment something is left hanging, with a real title and who has
+  the ball: me (you owe it), them, or other (waiting on someone else).
+- The due ones appear at boot under "Open loops". Raise each once, briefly, at a
+  natural moment. Record the answer (action=asked); that snoozes it. Asking again
+  after an answer is noise. When it is done, close it.
+- Noticing is not raising. Flag a loop each time you notice it going stale;
+  three flags make it due, so a later session says it out loud.
+- A loop waiting on someone else comes due only on its check date: never nag the
+  person about a ball they cannot move.
+"""
+
+
 def _drip(cfg, c: dict) -> str:
     if not getattr(cfg, "drip", False):
         return ""
+    _, bank_file = question_bank(cfg)
     return f"""
 ## Getting to know them (they asked for this)
 
-A question bank lives at `{_posix(Path(c['vault_dir']) / 'reference' / 'relationship-questions.md')}`.
+A question bank lives at `{_posix(Path(c['vault_dir']) / 'reference' / bank_file)}`.
 One or two questions per session at most, only at natural moments, never as a
 quiz, and zero is fine. After an answer, remember it (kind `user`) and mark the
 question asked in that file with the date. Reword freely; the intent matters,
@@ -383,7 +418,7 @@ Anything the public will see:
 - After any significant piece of work, give a plain-language summary of what
   changed and why it matters to them, sized to how technical they are. Not
   instead of the detail, alongside it.
-{project}{capabilities}{services}{drip}{remote_help}
+{project}{capabilities}{services}{open_loops}{drip}{remote_help}
 ## Identity
 
 (EMPTY: authored by the relationship, not by setup.)
@@ -399,6 +434,7 @@ def render(cfg, genesis_exe: str, harness: str = "claude-code") -> str:
         project=_project(cfg, c),
         capabilities=_capabilities(cfg, c),
         services=_services(cfg, c),
+        open_loops=_open_loops(cfg, c),
         drip=_drip(cfg, c),
         remote_help=_remote_help(cfg),
         **c,

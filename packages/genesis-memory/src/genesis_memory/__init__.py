@@ -12,7 +12,8 @@ from .fact import Fact, FactError, KINDS, STATUSES
 from .vault import Vault
 from .tiers import Continuity, Perishable
 from .graph import Graph
-from . import frontmatter, index, tiers, graph, filerefs, selflint, reachability
+from .openloops import OpenLoops, Loop, LoopError
+from . import frontmatter, index, tiers, graph, filerefs, selflint, reachability, openloops
 
 __all__ = [
     "Fact",
@@ -23,6 +24,10 @@ __all__ = [
     "Continuity",
     "Perishable",
     "Graph",
+    "OpenLoops",
+    "Loop",
+    "LoopError",
+    "openloops",
     "frontmatter",
     "index",
     "tiers",
