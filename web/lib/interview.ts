@@ -181,6 +181,9 @@ export function finalize(m: UserModel): Outcome {
       autonomy: tt >= 0.6 ? "review_first" : tt <= -0.6 ? "act" : "ask_when_unsure",
       surface: vt <= -0.3 ? "voice" : vt >= 0.3 ? "text" : "either",
       scope: band(pos.narrow_broad, "narrow", "broad"),
+      // Drip bank: assistant-leaning people get working-style questions.
+      // Mirrors interview.py finalize(); keep the threshold identical.
+      question_bank: tc >= 0.2 ? "relationship" : "working",
     },
   };
 }

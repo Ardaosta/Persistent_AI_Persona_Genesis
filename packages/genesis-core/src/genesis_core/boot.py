@@ -82,6 +82,16 @@ def recent_continuity(cfg, *, max_chars: int = 600) -> str:
     return "\n\n".join(parts)
 
 
+def open_loops_block(cfg) -> str:
+    """The open-loops slot for any boot path. A broken list says so out loud:
+    silence here would read as 'nothing open', the exact failure it replaces."""
+    from genesis_memory import OpenLoops, LoopError
+    try:
+        return OpenLoops(cfg.vault_dir).boot_block()
+    except LoopError as e:
+        return f"## Open loops\n(could not read your open loops: {e})"
+
+
 def boot_context_text(cfg) -> str:
     """The text a SessionStart hook injects into a harness (Claude Code) before
     turn 1: the lean memory index, recent continuity across the three tiers, the
@@ -108,6 +118,14 @@ def boot_context_text(cfg) -> str:
     cont = recent_continuity(cfg)
     if cont:
         blocks.append(f"## Recently (carry this forward)\n{cont}")
+
+    # Open loops get their OWN slot, always, never at the mercy of the continuity
+    # tail above (2026-09-29): a follow-up that reached its companion only because
+    # the right dream entry happened to be the last one in the thread was luck,
+    # and the entry before it would have been cut off.
+    ol = open_loops_block(cfg)
+    if ol:
+        blocks.append(ol)
 
     # Early-relationship catalysis: a passive "be curious" disposition loses to the
     # gravity of whatever task is in front of the model, so getting-to-know-you

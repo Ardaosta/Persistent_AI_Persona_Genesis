@@ -18,8 +18,18 @@ class TestMachineryNote(unittest.TestCase):
         passive = machinery_note({"proactivity": "on_request", "autonomy": "review_first", "memory_aggressiveness": "modest"})
         self.assertNotEqual(active, passive)
         self.assertIn("when you notice something useful", active)
-        self.assertIn("Stay out of the way", passive)
+        self.assertIn("stay out of the way", passive)
         self.assertIn("check with them first", passive)
+
+    def test_follow_through_is_on_for_every_proactivity(self):
+        """2026-09-29: 'tool' used to mean 'speak only when asked', which switched
+        follow-through off for exactly the people who want a capable assistant.
+        Sociability and follow-through are separate dials now."""
+        for prox in ("active", "occasional", "on_request"):
+            note = machinery_note({"proactivity": prox})
+            self.assertIn("follow through", note, prox)
+            self.assertIn("open loops", note, prox)
+        self.assertNotIn("speak up mainly when they ask", machinery_note({"proactivity": "on_request"}))
 
     def test_voice_surface_adds_listening_note(self):
         self.assertIn("listen", machinery_note({"surface": "voice"}))

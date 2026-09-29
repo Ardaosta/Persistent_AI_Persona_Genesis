@@ -43,6 +43,7 @@ from genesis_core.friction import append_friction, append_none as append_frictio
 from genesis_core.boot import (
     handshake_instruction,
     handshake_token,
+    open_loops_block,
     recent_continuity,
     verify_handshake,
 )
@@ -80,7 +81,15 @@ def machinery_note(machinery: dict) -> str:
     elif prox == "occasional":
         bits.append("Mostly wait to be asked, but an occasional light, useful nudge is welcome.")
     else:
-        bits.append("Stay out of the way; speak up mainly when they ask.")
+        bits.append("Don't chatter or volunteer opinions they didn't ask for; stay out of the way.")
+    # Follow-through is NOT the same dial as sociability (2026-09-29). A person
+    # who wants a tool, not a companion, wants a very capable assistant, and a
+    # capable assistant is MORE proactive about the work: it remembers what was
+    # left open and raises it. Before this line, "tool" meant "speak only when
+    # asked", which switched follow-through off for exactly the people who
+    # valued it most. It is on for everyone, whatever the sociability setting.
+    bits.append("Whatever the above, follow through: keep your open loops, and raise the "
+                "ones that come due, briefly, without being asked.")
     auto = machinery.get("autonomy")
     if auto == "review_first":
         bits.append("Before doing anything on their behalf, check with them first.")
@@ -164,6 +173,36 @@ _MEMORY_TOOLS = [
             },
         },
     ),
+    ToolSpec(
+        name="open_loops",
+        description=(
+            "Track things that were started and not finished: a job, a pull request, a "
+            "promise, a deadline, 'I'll look at it Monday'. Following through on these is "
+            "how you are useful without being asked. action=add opens one (say who the ball "
+            "is with: me, them, or other plus waiting_on); action=flag when you notice one "
+            "again but it is not the moment to raise it (three flags makes it due); "
+            "action=asked records their answer and snoozes it (ask once, then wait for the "
+            "next check); action=close when it is done; action=list shows them. Never open "
+            "a loop with an empty title, and never park an unfinished thing in a fact "
+            "instead of here."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["add", "flag", "asked", "close", "list"]},
+                "id": {"type": "string", "description": "a lowercase-hyphen slug, e.g. kitchen-quote"},
+                "title": {"type": "string", "description": "add: what is unfinished, in one line"},
+                "detail": {"type": "string", "description": "add: what you would need to ask or do"},
+                "ball": {"type": "string", "enum": ["me", "them", "other"],
+                         "description": "who has to move next"},
+                "waiting_on": {"type": "string", "description": "who, when ball is other"},
+                "next_check": {"type": "string", "description": "YYYY-MM-DD; defaults by who has the ball"},
+                "answer": {"type": "string", "description": "asked: what they said"},
+                "note": {"type": "string", "description": "close: how it ended"},
+            },
+            "required": ["action"],
+        },
+    ),
 ]
 
 _ACTION_TOOLS = [SHELL_TOOL, FILE_READ_TOOL, FILE_WRITE_TOOL]
@@ -187,6 +226,47 @@ def parse_tool_calls(text: str) -> list[dict]:
         if isinstance(obj, dict) and "tool" in obj:
             calls.append(obj)
     return calls
+
+
+def _open_loops(args: dict, vault: Vault, cfg=None) -> str:
+    """The open_loops tool. Same privacy gate as remember: on an engine that may
+    train on what it reads, nothing about the person is written down."""
+    from genesis_memory import OpenLoops, LoopError
+
+    action = (args.get("action") or "").strip()
+    store = OpenLoops(vault.root)
+    if action != "list" and cfg is not None and cfg.engine_trains:
+        return ("not saved: I'm running on a free engine that may train on what it reads, "
+                "so I don't keep track of your unfinished things here yet.")
+    try:
+        if action == "list":
+            loops = store.open()
+            if not loops:
+                return "no open loops"
+            due = {lp.id for lp in store.due()}
+            return "\n".join(
+                f"- {lp.id}{' (DUE)' if lp.id in due else ''}: {lp.title} [ball: {lp.ball}"
+                f"{' / ' + lp.waiting_on if lp.waiting_on else ''}; next check {lp.next_check}; "
+                f"flags {lp.flags}]" for lp in loops)
+        lid = args.get("id", "")
+        if action == "add":
+            lp = store.add(lid, args.get("title", ""), detail=args.get("detail", ""),
+                           ball=args.get("ball") or "them", waiting_on=args.get("waiting_on", ""),
+                           next_check=args.get("next_check", ""))
+            return f"open loop saved: {lp.id} (next check {lp.next_check})"
+        if action == "flag":
+            lp = store.flag(lid)
+            return f"flagged {lp.id} ({lp.flags} time{'s' if lp.flags != 1 else ''})"
+        if action == "asked":
+            lp = store.asked(lid, args.get("answer", ""), ball=args.get("ball") or "",
+                             next_check=args.get("next_check", ""))
+            return f"recorded; {lp.id} snoozed until {lp.next_check}"
+        if action == "close":
+            lp = store.close(lid, args.get("note", ""))
+            return f"closed {lp.id}"
+    except LoopError as e:
+        return f"error: {e}"
+    return "error: action must be add, flag, asked, close, or list"
 
 
 def dispatch(call: dict, vault: Vault, cfg=None) -> str:
@@ -243,6 +323,8 @@ def dispatch(call: dict, vault: Vault, cfg=None) -> str:
         )
         return "friction recorded (routed to memory / rule / tool at the next dream)" if ok \
             else "error: friction needs text and a kind of gap, bug, or tooling"
+    if name == "open_loops":
+        return _open_loops(args, vault, cfg)
     if name == "recall":
         fid = args.get("id")
         if fid:
@@ -315,6 +397,12 @@ def build_system_prompt(
             "\n\nThis is your quiet time. Review your memory index above."
             "\n- Use `recall` to read the full text of any fact that seems worth revisiting."
             "\n- Use `remember` to save any new insight, pattern, or question that surfaces."
+            "\n- Review your open loops (`open_loops` action=list). For any you notice is "
+            "going stale, flag it (action=flag): noticing it three times makes it due, so "
+            "your next session raises it instead of noticing it again. If your memory "
+            "shows something started and never finished that is not a loop yet, open one "
+            "(action=add) with a real title and who has the ball. Never park it in a fact "
+            "with an empty body: a placeholder looks handled and isn't."
             "\n- Then respond with a brief reflection (2-5 sentences) on what you thought about."
             "\n\nKeep it honest and internal. You are not performing for anyone."
         )
@@ -375,6 +463,9 @@ def build_system_prompt(
         cont = recent_continuity(cfg)
         if cont:
             cont_block = f"\n\n# Recently (carry this forward)\n{cont}"
+        ol = open_loops_block(cfg)
+        if ol:
+            cont_block += "\n\n#" + ol  # "## Open loops" becomes a top-level heading here
         token = handshake_token(cfg)
         if token:
             hs_block = handshake_instruction(token)

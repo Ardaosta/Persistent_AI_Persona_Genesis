@@ -592,6 +592,22 @@ def cmd_recall(args) -> int:
     return 0
 
 
+def cmd_loops(args) -> int:
+    """Open loops as a command, for a Mode-B harness and for a person reading
+    over its shoulder. Routes through the same code as the open_loops tool, so the
+    two cannot disagree about what a loop is."""
+    from genesis_memory import Vault
+    from .agent import _open_loops
+    cfg = cfgmod.load()
+    call = {k: v for k, v in vars(args).items()
+            if k in ("action", "id", "title", "detail", "ball", "waiting_on",
+                     "next_check", "answer", "note") and v not in (None, "")}
+    out = _open_loops(call, Vault(cfg.vault_dir), cfg)
+    stream = sys.stderr if out.startswith(("error", "not saved")) else sys.stdout
+    print(out, file=stream)
+    return 1 if stream is sys.stderr else 0
+
+
 def cmd_remember(args) -> int:
     """The blessed write path, as a command: write one durable fact to the vault
     (keeps the index and the tree consistent). This is what a Mode-B harness
@@ -1343,26 +1359,87 @@ def cmd_capabilities(args) -> int:
     return 0
 
 
-def _rerender_doors(cfg) -> None:
-    """Re-render CLAUDE.md / AGENTS.md for every wired harness (compile, don't fork)."""
+_MANUAL_HEAD = "# Genesis: operating manual"
+
+
+def _hand_written(path: _P) -> bool:
+    """True when a door file exists and Genesis did not write it. An owner-
+    authored companion keeps its persona in CLAUDE.md, and re-rendering used to
+    overwrite that file whole, so renaming the AI or adding a capability could
+    silently replace a person's hand-written companion with the template
+    (found 2026-09-29 while building `genesis refresh`)."""
+    try:
+        first = path.read_text(encoding="utf-8").lstrip().splitlines()[0]
+    except (OSError, IndexError):
+        return False
+    return first.strip() != _MANUAL_HEAD
+
+
+def _rerender_doors(cfg) -> list:
+    """Re-render CLAUDE.md / AGENTS.md for every wired harness (compile, don't
+    fork). A door file Genesis did not write is left untouched and returned, so
+    the caller can say so; it is never overwritten."""
     exe = _genesis_exe()
     home = _P.home() / "My AI"
+    skipped: list = []
     if not home.exists():
-        return
+        return skipped
     _ensure_capability_entries(cfg)
     _ensure_services(cfg)
     if "claude-code" in (cfg.harnesses or []):
-        from . import claude_wire
-        claude_wire.wire(cfg, exe, scope="project", home_dir=home)
+        if _hand_written(home / "CLAUDE.md"):
+            skipped.append(home / "CLAUDE.md")
+        else:
+            from . import claude_wire
+            claude_wire.wire(cfg, exe, scope="project", home_dir=home)
     if "codex" in (cfg.harnesses or []):
-        from . import codex_wire
-        codex_wire.wire(cfg, exe, home_dir=home)
+        if _hand_written(home / "AGENTS.md"):
+            skipped.append(home / "AGENTS.md")
+        else:
+            from . import codex_wire
+            codex_wire.wire(cfg, exe, home_dir=home)
+    for p in skipped:
+        print(f"left untouched (hand-written, not a Genesis manual): {p}", file=sys.stderr)
+    return skipped
+
+
+def cmd_refresh(args) -> int:
+    """Bring an existing AI up to the Genesis it now runs: re-render its manual
+    (so new machinery such as open loops is described to it) and optionally
+    switch its drip question bank. Needed because a manual is otherwise only
+    re-rendered as a side effect of renaming or capability changes, and the
+    bank is otherwise only chosen at first setup."""
+    cfg = cfgmod.load()
+    bank = getattr(args, "question_bank", None)
+    if bank:
+        machinery = dict(cfg.machinery or {})
+        machinery["question_bank"] = bank
+        cfgmod.update_fields(cfg, machinery=machinery)
+        cfg = cfgmod.load()
+        if cfg.drip:
+            print(f"question bank ready: {_ensure_question_bank(cfg)}", file=sys.stderr)
+        else:
+            print("question bank set; the drip is off, so no questions will be asked "
+                  "until it is turned on", file=sys.stderr)
+    skipped = _rerender_doors(cfg)
+    if skipped:
+        print("This AI has a hand-written instructions file, so it was not changed. "
+              "Tell the AI about open loops yourself, or add the section from "
+              "`genesis refresh --print-section`.", file=sys.stderr)
+    if getattr(args, "print_section", False):
+        from .manual import _cmds, _open_loops
+        print(_open_loops(cfg, _cmds(cfg, _genesis_exe())).strip())
+    print("refreshed", file=sys.stderr)
+    return 0
 
 
 def _ensure_question_bank(cfg) -> _P:
-    """Copy the shipped question bank into the vault once. The AI edits its copy."""
-    src = _P(__file__).with_name("resources") / "relationship_questions.md"
-    dst = cfg.vault_dir / "reference" / "relationship-questions.md"
+    """Copy the shipped question bank into the vault once. The AI edits its copy.
+    Which bank follows the onboarding's tool/companion answer (manual.question_bank)."""
+    from .manual import question_bank
+    res, fname = question_bank(cfg)
+    src = _P(__file__).with_name("resources") / res
+    dst = cfg.vault_dir / "reference" / fname
     if not dst.exists():
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
@@ -1750,6 +1827,30 @@ def main(argv=None) -> int:
     rem_p.add_argument("--desc", required=True, help="one line; this is what shows in the index")
     rem_p.add_argument("--body", default="", help="optional longer detail")
     rem_p.set_defaults(func=cmd_remember)
+
+    rf_p = sub.add_parser(
+        "refresh",
+        help="after updating Genesis: re-render this AI's manual (never a hand-written one), "
+             "optionally switch the drip question bank",
+    )
+    rf_p.add_argument("--question-bank", dest="question_bank", default=None,
+                      choices=["working", "relationship"],
+                      help="working = how the person works (assistant-leaning); relationship = who they are")
+    rf_p.add_argument("--print-section", dest="print_section", action="store_true",
+                      help="also print the open-loops manual section, to paste into a hand-written manual")
+    rf_p.set_defaults(func=cmd_refresh)
+
+    lp_p = sub.add_parser("loops", help="open loops: things started and not finished (add | flag | asked | close | list)")
+    lp_p.add_argument("action", nargs="?", default="list", choices=["add", "flag", "asked", "close", "list"])
+    lp_p.add_argument("--id", default=None, help="a lowercase-hyphen slug, e.g. kitchen-quote")
+    lp_p.add_argument("--title", default=None, help="add: what is unfinished, in one line")
+    lp_p.add_argument("--detail", default=None, help="add: what you would need to ask or do")
+    lp_p.add_argument("--ball", default=None, choices=["me", "them", "other"], help="who has to move next")
+    lp_p.add_argument("--waiting-on", dest="waiting_on", default=None, help="who, when ball is other")
+    lp_p.add_argument("--next-check", dest="next_check", default=None, help="YYYY-MM-DD")
+    lp_p.add_argument("--answer", default=None, help="asked: what they said")
+    lp_p.add_argument("--note", default=None, help="close: how it ended")
+    lp_p.set_defaults(func=cmd_loops)
     bc_p = sub.add_parser(
         "boot-context",
         help="print the boot ritual (index + continuity + clock) for a SessionStart hook",

@@ -277,6 +277,12 @@ def finalize(model: UserModel) -> dict:
         "autonomy": "review_first" if tt >= 0.6 else "act" if tt <= -0.6 else "ask_when_unsure",
         "surface": "voice" if vt <= -0.3 else "text" if vt >= 0.3 else "either",
         "scope": _band(pos["narrow_broad"], "narrow", "broad"),
+        # Which drip bank (2026-09-29). Same threshold as "occasional" proactivity:
+        # below it the person leans toward wanting a capable assistant, so the drip
+        # asks how they work, not who they are. Follow-through (open loops) is on
+        # for everyone regardless; see agent.machinery_note. Mirrored in
+        # web/lib/interview.ts.
+        "question_bank": "relationship" if tc >= 0.2 else "working",
     }
     # How much this profile actually rests on. Carried out of finalize() so no
     # caller can mistake an interview that asked nothing for one that asked six:
