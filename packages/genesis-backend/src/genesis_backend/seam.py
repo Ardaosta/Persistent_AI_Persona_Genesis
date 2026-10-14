@@ -57,6 +57,10 @@ class TurnResult:
     stop_reason: str = ""
     input_tokens: int | None = None
     output_tokens: int | None = None
+    # Prompt-cache accounting (Anthropic only; None elsewhere). input_tokens is
+    # the uncached remainder, so total prompt = input + creation + read.
+    cache_creation_input_tokens: int | None = None
+    cache_read_input_tokens: int | None = None
 
 
 @dataclass

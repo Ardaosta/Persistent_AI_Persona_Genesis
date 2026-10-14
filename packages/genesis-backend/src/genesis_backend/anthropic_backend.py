@@ -61,6 +61,37 @@ def _history_to_messages(history: list[dict]) -> list[dict]:
     return msgs
 
 
+def _with_history_cache(msgs: list[dict]) -> list[dict]:
+    """Return `msgs` with one prompt-cache breakpoint on the final content block.
+
+    The request renders tools -> system -> messages, and the cache matches the
+    exact prefix up to a breakpoint. Marking the LAST block caches the whole
+    conversation so far; next turn (or next tool step) re-sends the identical
+    prefix plus a delta, and reads everything before the delta from cache. The
+    system prompt is built once per Session, so it stays byte-identical across
+    turns and never invalidates the history behind it.
+
+    Works on copies: the caller's message dicts (and the neutral history they
+    came from) are never mutated. Prefixes under the model's minimum (1,024
+    tokens on Sonnet 4.6) are simply not cached; the API accepts the marker.
+    """
+    if not msgs:
+        return msgs
+    out = list(msgs)
+    last = dict(out[-1])
+    content = last["content"]
+    if isinstance(content, str):
+        blocks = [{"type": "text", "text": content}]
+    else:
+        blocks = [dict(b) for b in content]
+    if not blocks:
+        return msgs
+    blocks[-1]["cache_control"] = {"type": "ephemeral"}
+    last["content"] = blocks
+    out[-1] = last
+    return out
+
+
 class AnthropicBackend:
     def __init__(self, api_key: str, default_model: str = DEFAULT_MODEL):
         if not api_key:
@@ -110,7 +141,7 @@ class AnthropicBackend:
         payload: dict = {
             "model": model or self._model,
             "max_tokens": max_tokens,
-            "messages": _history_to_messages(history),
+            "messages": _with_history_cache(_history_to_messages(history)),
         }
         if system:
             payload["system"] = system
@@ -133,4 +164,6 @@ class AnthropicBackend:
             stop_reason=data.get("stop_reason", ""),
             input_tokens=usage.get("input_tokens"),
             output_tokens=usage.get("output_tokens"),
+            cache_creation_input_tokens=usage.get("cache_creation_input_tokens"),
+            cache_read_input_tokens=usage.get("cache_read_input_tokens"),
         )

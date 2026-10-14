@@ -54,7 +54,7 @@ function Install-WithWinget {
   $ErrorActionPreference = "Continue"
   $ok = $false
   try {
-    & winget install -e --id $Id @Extra --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
+    & winget install -e --source winget --id $Id @Extra --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
     $ok = ($LASTEXITCODE -eq 0)
   } catch { $ok = $false }
   $ErrorActionPreference = $prev

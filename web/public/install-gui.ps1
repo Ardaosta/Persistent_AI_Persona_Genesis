@@ -43,6 +43,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Off
+# Every function this script defines is handed to the worker runspace (see
+# Start-Gui). Snapshot what existed BEFORE our definitions, so the hand-off can
+# be "everything we added" instead of a hand-kept list. A hand-kept list
+# drifted once: Get-SeedHelper was never added, and every windowed install
+# failed at step 0 from 2026-09-21 until a fresh laptop caught it.
+$script:PreexistingFunctions = @(Get-ChildItem function: | ForEach-Object { $_.Name })
 
 # ---------------------------------------------------------------------------
 # Shared state. One synchronized table; the worker writes, the window reads.
@@ -440,7 +446,7 @@ function Step-EnsurePython {
   $py = Find-Python
   if (-not $py -and $S.HasWinget) {
     Set-Status "Installing Python. This can take a few minutes."
-    $r = Invoke-Native "winget" @("install", "-e", "--id", "Python.Python.3.12", "--scope", "user", "--silent",
+    $r = Invoke-Native "winget" @("install", "-e", "--source", "winget", "--id", "Python.Python.3.12", "--scope", "user", "--silent",
                                   "--accept-package-agreements", "--accept-source-agreements")
     Update-PathFromRegistry
     $py = Find-Python
@@ -468,7 +474,7 @@ function Step-EnsureGit {
   $installed = $false
   if (-not $git -and $S.HasWinget) {
     Set-Status "Installing Git. This can take a minute or two."
-    $r = Invoke-Native "winget" @("install", "-e", "--id", "Git.Git", "--silent",
+    $r = Invoke-Native "winget" @("install", "-e", "--source", "winget", "--id", "Git.Git", "--silent",
                                   "--accept-package-agreements", "--accept-source-agreements")
     Update-PathFromRegistry
     $git = Find-Git
@@ -865,10 +871,9 @@ function Start-Gui {
 
   # The worker: same functions, another thread. It sees $S and the functions.
   $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-  foreach ($fn in @("Write-Log", "Get-LogText", "Set-Status", "Start-Step", "Complete-Step", "Have", "Invoke-Native",
-                    "Update-PathFromRegistry", "Open-Url", "Wait-ForPerson", "Get-SeedName", "Test-PythonCandidate",
-                    "Find-Python", "Find-Git", "Find-ClaudeApp", "Step-CheckComputer", "Step-EnsurePython", "Step-EnsureGit",
-                    "Step-Download", "Step-Setup", "Step-MakeHome", "Step-CheckClaude", "Invoke-AllSteps")) {
+  $ours = @(Get-ChildItem function: | Where-Object { $script:PreexistingFunctions -notcontains $_.Name } | ForEach-Object { $_.Name })
+  Write-Log ("worker gets " + $ours.Count + " functions")
+  foreach ($fn in $ours) {
     $def = (Get-Command $fn -CommandType Function).Definition
     $iss.Commands.Add((New-Object System.Management.Automation.Runspaces.SessionStateFunctionEntry($fn, $def)))
   }

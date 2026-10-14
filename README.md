@@ -100,6 +100,13 @@ web/                 # the browser onboarding + the take-it-home installer
 engine-packs/        # per-engine reference config (content-free)
 ```
 
+## Genesis Live (private beta)
+
+Genesis Live adds a desktop HUD, phone access, and voice on top of this
+framework. It is in private beta and is not part of this repository. To ask for
+access, open an issue on this repo titled "Live beta access", or write to
+AIPersonaGenesis@protonmail.com.
+
 ## Honesty about maturity
 
 What is proven: the memory model, the growth loops, the onboarding-to-tuned-boot
