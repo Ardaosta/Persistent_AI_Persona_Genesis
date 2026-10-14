@@ -18,10 +18,10 @@ class TestVault(unittest.TestCase):
 
     def test_write_read_roundtrip(self):
         v = Vault(self.root)
-        path = v.write(Fact(id="larame", kind="user", description="the human", body="Lives in Springfield."), now=_T)
-        self.assertEqual(path, self.root / "user" / "larame.md")
+        path = v.write(Fact(id="alex", kind="user", description="the human", body="Lives in Springfield."), now=_T)
+        self.assertEqual(path, self.root / "user" / "alex.md")
         got = v.read(path)
-        self.assertEqual(got.id, "larame")
+        self.assertEqual(got.id, "alex")
         self.assertEqual(got.description, "the human")
         self.assertEqual(got.body, "Lives in Springfield.")
         self.assertEqual(got.created, _T)
